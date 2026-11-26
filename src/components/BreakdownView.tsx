@@ -33,7 +33,7 @@ export function BreakdownView({
   onExit,
   onNotify,
 }: BreakdownViewProps) {
-  const [copiedField, setCopiedField] = useState<'zelle' | 'amount' | null>(null)
+  const [copiedField, setCopiedField] = useState<'zelle' | 'amount' | 'venmo' | null>(null)
 
   const note = buildPaymentNote(payload.m, payload.d)
   const venmoUrl = payload.h.v
@@ -53,7 +53,7 @@ export function BreakdownView({
 
   const copyValue = async (
     value: string,
-    field: 'zelle' | 'amount',
+    field: 'zelle' | 'amount' | 'venmo',
     label: string
   ) => {
     try {
@@ -211,18 +211,52 @@ export function BreakdownView({
           {hasAnyPayMethod ? (
             <div className="pay-buttons-stack">
               {venmoUrl && (
-                <a
-                  href={venmoUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="pay-btn venmo"
-                >
-                  <span>Pay with Venmo (@{payload.h.v})</span>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                    <span className="mono">{formatCents(payload.g)}</span>
-                    <ExternalLink size={15} />
-                  </span>
-                </a>
+                <div>
+                  <a
+                    href={venmoUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="pay-btn venmo"
+                  >
+                    <span>Pay with Venmo (@{payload.h.v})</span>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                      <span className="mono">{formatCents(payload.g)}</span>
+                      <ExternalLink size={15} />
+                    </span>
+                  </a>
+                  <div className="venmo-sub-actions">
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-xs"
+                      onClick={() =>
+                        copyValue(`@${payload.h.v}`, 'venmo', `Venmo @${payload.h.v}`)
+                      }
+                    >
+                      {copiedField === 'venmo' ? <Check size={12} /> : <Copy size={12} />}
+                      <span>{copiedField === 'venmo' ? 'Copied handle' : 'Copy @handle'}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-xs"
+                      onClick={() =>
+                        copyValue(
+                          centsToPlainAmount(payload.g),
+                          'amount',
+                          `amount ${formatCents(payload.g)}`
+                        )
+                      }
+                    >
+                      {copiedField === 'amount' ? <Check size={12} /> : <Copy size={12} />}
+                      <span>{copiedField === 'amount' ? 'Copied amount' : 'Copy amount'}</span>
+                    </button>
+                  </div>
+                  {isHostPreview && (
+                    <p className="field-hint" style={{ margin: '4px 2px 0' }}>
+                      Preview note: Venmo&apos;s app won&apos;t open a payment to your own
+                      account — test this button from a friend&apos;s phone.
+                    </p>
+                  )}
+                </div>
               )}
 
               {cashAppUrl && (

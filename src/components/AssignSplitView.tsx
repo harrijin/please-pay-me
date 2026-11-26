@@ -4,7 +4,10 @@ import {
   ArrowRight,
   Crown,
   Divide,
+  Image as ImageIcon,
+  Maximize2,
   Minus,
+  Pin,
   Plus,
   Scale,
   SlidersHorizontal,
@@ -12,6 +15,8 @@ import {
   UserPlus,
   Users,
   X,
+  ZoomIn,
+  ZoomOut,
 } from 'lucide-react'
 import type {
   AppSettings,
@@ -36,6 +41,7 @@ interface AssignSplitViewProps {
   receipt: ReceiptSplit
   summary: SplitSummary
   settings: AppSettings
+  receiptImageUrl: string | null
   onChange: (next: ReceiptSplit) => void
   onSaveFriendToSettings: (name: string, venmo?: string) => void
   onGoCollect: () => void
@@ -93,6 +99,7 @@ export function AssignSplitView({
   receipt,
   summary,
   settings,
+  receiptImageUrl,
   onChange,
   onSaveFriendToSettings,
   onGoCollect,
@@ -102,6 +109,9 @@ export function AssignSplitView({
   const [newPersonVenmo, setNewPersonVenmo] = useState('')
   const [editingPersonId, setEditingPersonId] = useState<string | null>(null)
   const [expandedWeightsItemId, setExpandedWeightsItemId] = useState<string | null>(null)
+  const [receiptViewerOpen, setReceiptViewerOpen] = useState(false)
+  const [receiptPinned, setReceiptPinned] = useState(false)
+  const [receiptZoom, setReceiptZoom] = useState(1)
 
   const updateReceipt = (patch: Partial<ReceiptSplit>) => {
     onChange({ ...receipt, ...patch, updatedAt: Date.now() })
@@ -284,13 +294,71 @@ export function AssignSplitView({
           </button>
         </div>
 
-        {summary.unassignedItemIds.length > 0 && (
-          <span className="status-chip warn">
-            <AlertCircle size={13} />
-            {summary.unassignedItemIds.length} unassigned
-          </span>
-        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          {receiptImageUrl && (
+            <button
+              type="button"
+              id="view-receipt-img-btn"
+              className={`btn btn-xs ${receiptPinned ? 'btn-primary' : 'btn-soft'}`}
+              onClick={() => {
+                setReceiptZoom(1)
+                setReceiptViewerOpen(true)
+              }}
+            >
+              <ImageIcon size={14} />
+              <span>View Receipt</span>
+            </button>
+          )}
+
+          {summary.unassignedItemIds.length > 0 && (
+            <span className="status-chip warn">
+              <AlertCircle size={13} />
+              {summary.unassignedItemIds.length} unassigned
+            </span>
+          )}
+        </div>
       </div>
+
+      {/* Pinned Receipt Reference Bar (optional split-screen while editing items) */}
+      {receiptImageUrl && receiptPinned && (
+        <section className="receipt-pin-bar" aria-label="Pinned receipt photo">
+          <div className="receipt-pin-head">
+            <span className="receipt-pin-title">
+              <ImageIcon size={14} />
+              <span>Receipt Reference (scroll to inspect)</span>
+            </span>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button
+                type="button"
+                className="btn btn-secondary btn-xs"
+                onClick={() => {
+                  setReceiptZoom(1)
+                  setReceiptViewerOpen(true)
+                }}
+              >
+                <Maximize2 size={13} />
+                <span>Zoom</span>
+              </button>
+              <button
+                type="button"
+                className="btn btn-ghost btn-xs"
+                onClick={() => setReceiptPinned(false)}
+                aria-label="Hide pinned receipt"
+              >
+                <X size={14} />
+                <span>Hide</span>
+              </button>
+            </div>
+          </div>
+          <div className="receipt-pin-scroll">
+            <img
+              src={receiptImageUrl}
+              alt="Cropped receipt reference"
+              className="receipt-pin-img"
+            />
+          </div>
+        </section>
+      )}
 
       {/* Merchant & Date */}
       <section className="card">
@@ -495,15 +563,28 @@ export function AssignSplitView({
       <section className="card">
         <div className="card-header">
           <h2 className="card-title">Items ({receipt.items.length})</h2>
-          <button
-            type="button"
-            id="add-item-btn"
-            className="btn btn-soft btn-xs"
-            onClick={handleAddItem}
-          >
-            <Plus size={14} />
-            <span>Add Item</span>
-          </button>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            {receiptImageUrl && (
+              <button
+                type="button"
+                className="btn btn-secondary btn-xs"
+                onClick={() => setReceiptPinned((p) => !p)}
+                title="Pin receipt photo above items while verifying prices"
+              >
+                <Pin size={13} />
+                <span>{receiptPinned ? 'Unpin Photo' : 'Pin Photo'}</span>
+              </button>
+            )}
+            <button
+              type="button"
+              id="add-item-btn"
+              className="btn btn-soft btn-xs"
+              onClick={handleAddItem}
+            >
+              <Plus size={14} />
+              <span>Add Item</span>
+            </button>
+          </div>
         </div>
 
         <div className="items-list">
@@ -905,6 +986,96 @@ export function AssignSplitView({
           </button>
         </div>
       </div>
+
+      {/* Full-Screen Zoomable Receipt Image Viewer */}
+      {receiptViewerOpen && receiptImageUrl && (
+        <div
+          className="fullscreen-overlay qr-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Uploaded receipt image"
+        >
+          <div className="fullscreen-header">
+            <div className="fullscreen-header-inner">
+              <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>
+                Receipt Photo
+              </div>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <button
+                  type="button"
+                  className="qr-nav-btn"
+                  style={{ minHeight: 36, padding: '6px 10px', fontSize: '0.8rem' }}
+                  onClick={() => {
+                    setReceiptPinned(true)
+                    setReceiptViewerOpen(false)
+                  }}
+                >
+                  <Pin size={14} />
+                  <span>Pin While Editing</span>
+                </button>
+                <button
+                  type="button"
+                  id="close-receipt-viewer-btn"
+                  className="qr-nav-btn"
+                  style={{ minHeight: 36, padding: '6px 10px' }}
+                  onClick={() => setReceiptViewerOpen(false)}
+                  aria-label="Close receipt viewer"
+                >
+                  <X size={17} />
+                  <span>Done</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="receipt-viewer-toolbar">
+            <button
+              type="button"
+              className="qr-nav-btn"
+              style={{ minHeight: 36, padding: '6px 12px' }}
+              disabled={receiptZoom <= 1}
+              onClick={() =>
+                setReceiptZoom((z) => Math.max(1, Number((z - 0.5).toFixed(2))))
+              }
+              aria-label="Zoom out"
+            >
+              <ZoomOut size={16} />
+            </button>
+            <button
+              type="button"
+              className="qr-nav-btn mono"
+              style={{ minHeight: 36, padding: '6px 12px', fontSize: '0.82rem' }}
+              onClick={() => setReceiptZoom(1)}
+            >
+              {Math.round(receiptZoom * 100)}%
+            </button>
+            <button
+              type="button"
+              className="qr-nav-btn"
+              style={{ minHeight: 36, padding: '6px 12px' }}
+              disabled={receiptZoom >= 2.5}
+              onClick={() =>
+                setReceiptZoom((z) => Math.min(2.5, Number((z + 0.5).toFixed(2))))
+              }
+              aria-label="Zoom in"
+            >
+              <ZoomIn size={16} />
+            </button>
+          </div>
+
+          <div className="receipt-viewer-stage">
+            <img
+              src={receiptImageUrl}
+              alt="Cropped and redacted receipt"
+              className="receipt-viewer-img"
+              style={{
+                width: `${receiptZoom * 100}%`,
+                maxWidth: receiptZoom === 1 ? '640px' : 'none',
+              }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   )
 }

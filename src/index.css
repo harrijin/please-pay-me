@@ -1857,6 +1857,92 @@ a:focus-visible {
   }
 }
 
+.venmo-sub-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+/* ==========================================================================
+   Pinned Receipt Reference & Full-Screen Receipt Viewer
+   ========================================================================== */
+
+.receipt-pin-bar {
+  position: sticky;
+  top: calc(61px + env(safe-area-inset-top, 0px));
+  z-index: 30;
+  background: var(--surface);
+  border: 1.5px solid var(--accent-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-elevated);
+  overflow: hidden;
+}
+
+.receipt-pin-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--accent-soft);
+  border-bottom: 1px solid var(--accent-border);
+}
+
+.receipt-pin-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--accent-hover);
+}
+
+.receipt-pin-scroll {
+  max-height: 30dvh;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  background: #181715;
+  padding: 8px;
+  text-align: center;
+}
+
+.receipt-pin-img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 6px;
+}
+
+.receipt-viewer-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(20, 20, 19, 0.96);
+}
+
+.receipt-viewer-stage {
+  flex: 1;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 16px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+.receipt-viewer-img {
+  display: block;
+  height: auto;
+  border-radius: 10px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.5);
+  transition: width 0.15s ease;
+}
+
 /* ==========================================================================
    Responsive Adjustments
    ========================================================================== */

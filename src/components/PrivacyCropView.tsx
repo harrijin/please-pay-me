@@ -22,10 +22,10 @@ import {
 interface PrivacyCropViewProps {
   photoFile: File
   settings: AppSettings
-  onScanComplete: (raw: ScannedReceiptRaw) => void
+  onScanComplete: (raw: ScannedReceiptRaw, croppedImageDataUrl: string) => void
   onCancel: () => void
   onOpenSettings: () => void
-  onManualFallback: () => void
+  onManualFallback: (croppedImageDataUrl?: string) => void
 }
 
 type EditMode = 'crop' | 'blackout'
@@ -299,13 +299,33 @@ export function PrivacyCropView({
         jpegBase64: processed.base64,
       })
 
-      onScanComplete(scanned)
+      onScanComplete(scanned, processed.dataUrl)
     } catch (err) {
       setScanError(
         err instanceof Error ? err.message : 'Receipt scan failed. Please try again.'
       )
     } finally {
       setScanning(false)
+    }
+  }
+
+  const handleManualWithImage = async () => {
+    if (!imageEl) {
+      onManualFallback()
+      return
+    }
+    try {
+      const processed = await exportCroppedRedactedJpeg({
+        image: imageEl,
+        rotationDeg,
+        crop,
+        redactions,
+        maxDimension: 1600,
+        quality: 0.85,
+      })
+      onManualFallback(processed.dataUrl)
+    } catch {
+      onManualFallback()
     }
   }
 
@@ -542,7 +562,7 @@ export function PrivacyCropView({
             <button
               type="button"
               className="btn btn-secondary btn-sm"
-              onClick={onManualFallback}
+              onClick={handleManualWithImage}
             >
               <PenLine size={15} />
               <span>Enter Manually Instead</span>

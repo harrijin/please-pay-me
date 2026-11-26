@@ -50,12 +50,31 @@ function parseInitialHash(): {
   }
 }
 
+const RECEIPT_IMAGE_SESSION_KEY = 'pleasepayme_receipt_img_v1'
+
+function loadSessionReceiptImages(): Record<string, string> {
+  try {
+    const raw = sessionStorage.getItem(RECEIPT_IMAGE_SESSION_KEY)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw) as { id?: string; dataUrl?: string }
+    if (parsed.id && parsed.dataUrl) {
+      return { [parsed.id]: parsed.dataUrl }
+    }
+  } catch {
+    // ignore storage errors
+  }
+  return {}
+}
+
 export default function App() {
   const [hashState, setHashState] = useState(parseInitialHash)
   const [route, setRoute] = useState<AppRoute>('home')
   const [settings, setSettings] = useState<AppSettings>(() => loadSettings())
   const [recentSplits, setRecentSplits] = useState<ReceiptSplit[]>(() =>
     loadRecentSplits()
+  )
+  const [receiptImages, setReceiptImages] = useState<Record<string, string>>(
+    () => loadSessionReceiptImages()
   )
   const [pendingPhoto, setPendingPhoto] = useState<File | null>(null)
   const [activeReceipt, setActiveReceipt] = useState<ReceiptSplit | null>(null)
@@ -65,6 +84,18 @@ export default function App() {
 
   const notify = useCallback((msg: string) => {
     setToastMsg(msg)
+  }, [])
+
+  const storeReceiptImage = useCallback((splitId: string, dataUrl: string) => {
+    setReceiptImages((prev) => ({ ...prev, [splitId]: dataUrl }))
+    try {
+      sessionStorage.setItem(
+        RECEIPT_IMAGE_SESSION_KEY,
+        JSON.stringify({ id: splitId, dataUrl })
+      )
+    } catch {
+      // Ignore quota errors; image stays in memory for this session
+    }
   }, [])
 
   useEffect(() => {
@@ -121,8 +152,12 @@ export default function App() {
     setRoute('crop')
   }
 
-  const handleScanComplete = (raw: ScannedReceiptRaw) => {
+  const handleScanComplete = (
+    raw: ScannedReceiptRaw,
+    croppedImageDataUrl: string
+  ) => {
     const receipt = createReceiptFromScan(raw, settings)
+    storeReceiptImage(receipt.id, croppedImageDataUrl)
     setPendingPhoto(null)
     persistActiveReceipt(receipt)
     setRoute('assign')
@@ -136,8 +171,11 @@ export default function App() {
     notify('Loaded sample receipt — try editing or collecting!')
   }
 
-  const handleEnterManual = () => {
+  const handleEnterManual = (croppedImageDataUrl?: string) => {
     const blank = createBlankReceipt(settings)
+    if (croppedImageDataUrl) {
+      storeReceiptImage(blank.id, croppedImageDataUrl)
+    }
     setPendingPhoto(null)
     persistActiveReceipt(blank)
     setRoute('assign')
@@ -279,7 +317,7 @@ export default function App() {
             recentSplits={recentSplits}
             onSelectPhoto={handleSelectPhoto}
             onTrySample={handleTrySample}
-            onEnterManual={handleEnterManual}
+            onEnterManual={() => handleEnterManual()}
             onOpenRecent={handleOpenRecent}
             onDeleteRecent={handleDeleteRecent}
             onOpenSettings={() => setSettingsOpen(true)}
@@ -305,6 +343,7 @@ export default function App() {
             receipt={activeReceipt}
             summary={summary}
             settings={settings}
+            receiptImageUrl={receiptImages[activeReceipt.id] ?? null}
             onChange={persistActiveReceipt}
             onSaveFriendToSettings={handleSaveFriendToSettings}
             onGoCollect={() => setRoute('collect')}

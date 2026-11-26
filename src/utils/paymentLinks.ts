@@ -5,7 +5,7 @@ export function cleanVenmoHandle(raw?: string): string {
   if (!raw) return ''
   return raw
     .trim()
-    .replace(/^https?:\/\/(www\.)?venmo\.com\/u?\//i, '')
+    .replace(/^https?:\/\/(www\.|account\.)?venmo\.com\/(u\/)?/i, '')
     .replace(/^@+/, '')
     .replace(/[^a-zA-Z0-9_-]/g, '')
 }
@@ -33,6 +33,21 @@ export function cleanZelleHandle(raw?: string): string {
   return raw.trim()
 }
 
+function encodeVenmoQuery(params: Record<string, string | undefined>): string {
+  return Object.entries(params)
+    .filter(([, value]) => value !== undefined && value !== '')
+    .map(
+      ([key, value]) =>
+        `${encodeURIComponent(key)}=${encodeURIComponent(value as string)}`
+    )
+    .join('&')
+}
+
+/**
+ * Builds a Venmo payment link using the query-parameter route (`/?txn=pay&recipients=...`)
+ * with %20 space encoding, which avoids Android App Link crashes on `/<username>` routes
+ * and redirects cleanly on iOS and desktop web.
+ */
 export function buildVenmoPayUrl(
   recipientHandle: string,
   amountCents: number,
@@ -41,12 +56,13 @@ export function buildVenmoPayUrl(
   const user = cleanVenmoHandle(recipientHandle)
   if (!user) return null
   const amount = centsToPlainAmount(amountCents)
-  const params = new URLSearchParams({
+  const query = encodeVenmoQuery({
     txn: 'pay',
+    recipients: user,
     amount,
     note,
   })
-  return `https://venmo.com/${encodeURIComponent(user)}?${params.toString()}`
+  return `https://venmo.com/?${query}`
 }
 
 export function buildVenmoChargeUrl(
@@ -56,15 +72,13 @@ export function buildVenmoChargeUrl(
 ): string {
   const friend = cleanVenmoHandle(friendHandle)
   const amount = centsToPlainAmount(amountCents)
-  const params = new URLSearchParams({
+  const query = encodeVenmoQuery({
     txn: 'charge',
+    recipients: friend || undefined,
     amount,
     note,
   })
-  if (friend) {
-    return `https://venmo.com/${encodeURIComponent(friend)}?${params.toString()}`
-  }
-  return `https://venmo.com/?${params.toString()}`
+  return `https://venmo.com/?${query}`
 }
 
 export function buildCashAppPayUrl(
@@ -87,7 +101,7 @@ export function buildPayPalPayUrl(
 
 export function buildPaymentNote(merchant: string, date?: string): string {
   const place = merchant.trim() || 'Shared Receipt'
-  return date ? `${place} (${date}) via PleasePayMe` : `${place} via PleasePayMe`
+  return date ? `${place} (${date})` : place
 }
 
 export function hasAnyPaymentHandle(handles: PaymentHandles): boolean {

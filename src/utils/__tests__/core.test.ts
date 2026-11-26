@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { PaymentHandles, ReceiptSplit } from '../../types/receipt'
 import {
   buildCashAppPayUrl,
+  buildPaymentNote,
   buildPayPalPayUrl,
   buildVenmoChargeUrl,
   buildVenmoPayUrl,
@@ -102,11 +103,11 @@ describe('calculateSplit', () => {
 
 describe('paymentLinks', () => {
   it('formats Venmo pay, Venmo charge, Cash App, and PayPal.Me links correctly', () => {
-    expect(buildVenmoPayUrl('@harrijin', 1845, 'Dinner')).toBe(
-      'https://venmo.com/harrijin?txn=pay&amount=18.45&note=Dinner'
+    expect(buildVenmoPayUrl('@harrijin', 1845, 'Marigold Bistro (2026-11-26)')).toBe(
+      'https://venmo.com/?txn=pay&recipients=harrijin&amount=18.45&note=Marigold%20Bistro%20(2026-11-26)'
     )
     expect(buildVenmoChargeUrl('maya-c', 1845, 'Dinner')).toBe(
-      'https://venmo.com/maya-c?txn=charge&amount=18.45&note=Dinner'
+      'https://venmo.com/?txn=charge&recipients=maya-c&amount=18.45&note=Dinner'
     )
     expect(buildVenmoChargeUrl(undefined, 1845, 'Dinner')).toBe(
       'https://venmo.com/?txn=charge&amount=18.45&note=Dinner'
@@ -117,6 +118,10 @@ describe('paymentLinks', () => {
     expect(buildPayPalPayUrl('harrijin', 1845)).toBe(
       'https://paypal.me/harrijin/18.45USD'
     )
+    expect(buildPaymentNote('Marigold Bistro', '2026-11-26')).toBe(
+      'Marigold Bistro (2026-11-26)'
+    )
+    expect(buildPaymentNote('Marigold Bistro')).toBe('Marigold Bistro')
   })
 
   it('resolves direct QR destination and falls back cleanly when handle missing', () => {
@@ -134,7 +139,9 @@ describe('paymentLinks', () => {
       note: 'Lunch',
     })
     expect(direct.isFallback).toBe(false)
-    expect(direct.url).toContain('https://venmo.com/harrijin?txn=pay&amount=25.00')
+    expect(direct.url).toBe(
+      'https://venmo.com/?txn=pay&recipients=harrijin&amount=25.00&note=Lunch'
+    )
 
     const fallback = resolveDestinationUrl({
       destination: 'cashapp',
