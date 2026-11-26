@@ -1,4 +1,4 @@
-const CACHE_NAME = 'please-pay-me-v6'
+const CACHE_NAME = 'please-pay-me-v7'
 const APP_SHELL = ['./', './index.html', './manifest.webmanifest', './icon.svg']
 
 self.addEventListener('install', (event) => {

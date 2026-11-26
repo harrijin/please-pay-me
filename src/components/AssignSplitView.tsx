@@ -135,6 +135,7 @@ export function AssignSplitView({
   const [newPersonPayPal, setNewPersonPayPal] = useState('')
   const [newPersonZelle, setNewPersonZelle] = useState('')
   const [showMoreHandles, setShowMoreHandles] = useState(false)
+  const [saveNewPersonToFriends, setSaveNewPersonToFriends] = useState(false)
   const [editingPersonId, setEditingPersonId] = useState<string | null>(null)
   const [expandedWeightsItemId, setExpandedWeightsItemId] = useState<string | null>(null)
   const [receiptViewerOpen, setReceiptViewerOpen] = useState(false)
@@ -166,22 +167,27 @@ export function AssignSplitView({
     }
 
     updateReceipt({ people: [...receipt.people, person] })
-    setNewPersonName('')
-    setNewPersonVenmo('')
-    setNewPersonCashApp('')
-    setNewPersonPayPal('')
-    setNewPersonZelle('')
-    setShowMoreHandles(false)
 
-    // Save/update in quick-add friends directory
-    if (name.toLowerCase() !== (settings.userName || 'me').toLowerCase()) {
+    if (
+      saveNewPersonToFriends &&
+      name.toLowerCase() !== (settings.userName || 'me').toLowerCase()
+    ) {
       onSaveFriendToSettings(name, {
         venmo: venmo || undefined,
         cashApp: cashApp || undefined,
         paypal: paypal || undefined,
         zelle: zelle || undefined,
       })
+      onNotify(`Added ${name} and saved to Saved Friends`)
     }
+
+    setNewPersonName('')
+    setNewPersonVenmo('')
+    setNewPersonCashApp('')
+    setNewPersonPayPal('')
+    setNewPersonZelle('')
+    setShowMoreHandles(false)
+    setSaveNewPersonToFriends(false)
   }
 
   const handleQuickAddSavedFriend = (sf: SavedFriend) => {
@@ -645,13 +651,11 @@ export function AssignSplitView({
                   onChange={(e) =>
                     handleUpdatePerson(editingPerson.id, { venmo: e.target.value })
                   }
-                  onBlur={(e) => {
-                    const clean = cleanVenmoHandle(e.target.value)
-                    handleUpdatePerson(editingPerson.id, { venmo: clean })
-                    if (!editingPerson.isSelf && clean) {
-                      onSaveFriendToSettings(editingPerson.name, { venmo: clean })
-                    }
-                  }}
+                  onBlur={(e) =>
+                    handleUpdatePerson(editingPerson.id, {
+                      venmo: cleanVenmoHandle(e.target.value),
+                    })
+                  }
                 />
               </div>
 
@@ -665,13 +669,11 @@ export function AssignSplitView({
                   onChange={(e) =>
                     handleUpdatePerson(editingPerson.id, { cashApp: e.target.value })
                   }
-                  onBlur={(e) => {
-                    const clean = cleanCashAppHandle(e.target.value)
-                    handleUpdatePerson(editingPerson.id, { cashApp: clean })
-                    if (!editingPerson.isSelf && clean) {
-                      onSaveFriendToSettings(editingPerson.name, { cashApp: clean })
-                    }
-                  }}
+                  onBlur={(e) =>
+                    handleUpdatePerson(editingPerson.id, {
+                      cashApp: cleanCashAppHandle(e.target.value),
+                    })
+                  }
                 />
               </div>
 
@@ -685,13 +687,11 @@ export function AssignSplitView({
                   onChange={(e) =>
                     handleUpdatePerson(editingPerson.id, { paypal: e.target.value })
                   }
-                  onBlur={(e) => {
-                    const clean = cleanPayPalHandle(e.target.value)
-                    handleUpdatePerson(editingPerson.id, { paypal: clean })
-                    if (!editingPerson.isSelf && clean) {
-                      onSaveFriendToSettings(editingPerson.name, { paypal: clean })
-                    }
-                  }}
+                  onBlur={(e) =>
+                    handleUpdatePerson(editingPerson.id, {
+                      paypal: cleanPayPalHandle(e.target.value),
+                    })
+                  }
                 />
               </div>
 
@@ -705,16 +705,43 @@ export function AssignSplitView({
                   onChange={(e) =>
                     handleUpdatePerson(editingPerson.id, { zelle: e.target.value })
                   }
-                  onBlur={(e) => {
-                    const clean = cleanZelleHandle(e.target.value)
-                    handleUpdatePerson(editingPerson.id, { zelle: clean })
-                    if (!editingPerson.isSelf && clean) {
-                      onSaveFriendToSettings(editingPerson.name, { zelle: clean })
-                    }
-                  }}
+                  onBlur={(e) =>
+                    handleUpdatePerson(editingPerson.id, {
+                      zelle: cleanZelleHandle(e.target.value),
+                    })
+                  }
                 />
               </div>
             </div>
+
+            {!editingPerson.isSelf && editingPerson.name.trim() && (
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <button
+                  type="button"
+                  className="btn btn-soft btn-xs"
+                  onClick={() => {
+                    onSaveFriendToSettings(editingPerson.name.trim(), {
+                      venmo: cleanVenmoHandle(editingPerson.venmo) || undefined,
+                      cashApp: cleanCashAppHandle(editingPerson.cashApp) || undefined,
+                      paypal: cleanPayPalHandle(editingPerson.paypal) || undefined,
+                      zelle: cleanZelleHandle(editingPerson.zelle) || undefined,
+                    })
+                    onNotify(`Saved ${editingPerson.name.trim()} to Saved Friends`)
+                  }}
+                >
+                  <UserPlus size={13} />
+                  <span>
+                    {settings.savedFriends.some(
+                      (sf) =>
+                        sf.name.toLowerCase() ===
+                        editingPerson.name.trim().toLowerCase()
+                    )
+                      ? 'Update Saved Friend'
+                      : 'Save to Saved Friends'}
+                  </span>
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -747,7 +774,15 @@ export function AssignSplitView({
             </button>
           </div>
 
-          <div>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 10,
+              flexWrap: 'wrap',
+            }}
+          >
             <button
               type="button"
               className="btn btn-ghost btn-xs"
@@ -761,6 +796,28 @@ export function AssignSplitView({
                   : 'Add Cash App / PayPal / Zelle'}
               </span>
             </button>
+
+            <label
+              htmlFor="save-friend-checkbox"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                fontSize: '0.78rem',
+                fontWeight: 600,
+                color: 'var(--ink-secondary)',
+                cursor: 'pointer',
+              }}
+            >
+              <input
+                id="save-friend-checkbox"
+                type="checkbox"
+                checked={saveNewPersonToFriends}
+                onChange={(e) => setSaveNewPersonToFriends(e.target.checked)}
+                style={{ accentColor: 'var(--accent)', width: 15, height: 15 }}
+              />
+              <span>Save to Saved Friends</span>
+            </label>
           </div>
 
           {showMoreHandles && (

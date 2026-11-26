@@ -97,7 +97,6 @@ export function createSampleReceipt(settings: AppSettings): ReceiptSplit {
 export function createBlankReceipt(settings: AppSettings): ReceiptSplit {
   const now = Date.now()
   const meId = generateId('p')
-  const friendId = generateId('p')
 
   return {
     id: generateId('split'),
@@ -106,7 +105,6 @@ export function createBlankReceipt(settings: AppSettings): ReceiptSplit {
     currency: normalizeCurrencyCode(settings.defaultCurrency),
     people: [
       { id: meId, name: settings.userName.trim() || 'Me', color: pickPersonColor(0), isSelf: true },
-      { id: friendId, name: 'Friend 1', color: pickPersonColor(1) },
     ],
     payerId: meId,
     items: [
@@ -137,27 +135,6 @@ export function createReceiptFromScan(
   const people: Person[] = [
     { id: meId, name: settings.userName.trim() || 'Me', color: pickPersonColor(0), isSelf: true },
   ]
-
-  // Pre-populate up to 2 saved friends for quick tapping if the user has saved friends
-  if (settings.savedFriends.length > 0) {
-    settings.savedFriends.slice(0, 2).forEach((sf, i) => {
-      people.push({
-        id: generateId('p'),
-        name: sf.name,
-        color: pickPersonColor(i + 1),
-        ...(sf.venmo ? { venmo: sf.venmo } : {}),
-        ...(sf.cashApp ? { cashApp: sf.cashApp } : {}),
-        ...(sf.paypal ? { paypal: sf.paypal } : {}),
-        ...(sf.zelle ? { zelle: sf.zelle } : {}),
-      })
-    })
-  } else {
-    people.push({
-      id: generateId('p'),
-      name: 'Friend 1',
-      color: pickPersonColor(1),
-    })
-  }
 
   const detected = raw.currency?.trim().toUpperCase()
   const isKnownDetected = Boolean(
