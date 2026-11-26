@@ -1,0 +1,19 @@
+{
+  "name": "PleasePayMe — Receipt Splitter",
+  "short_name": "PleasePayMe",
+  "description": "Snap receipts privately, split to the exact cent, and share zero-database payment breakdown links and QR codes.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f5f2ea",
+  "theme_color": "#0f766e",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
