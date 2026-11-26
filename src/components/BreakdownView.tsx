@@ -37,6 +37,10 @@ export function BreakdownView({
 }: BreakdownViewProps) {
   const [copiedField, setCopiedField] = useState<'zelle' | 'amount' | 'venmo' | null>(null)
 
+  const currency = payload.c
+  const fmt = (cents: number) => formatCents(cents, currency)
+  const plainAmount = centsToPlainAmount(payload.g, currency)
+
   const note = buildPaymentNote(payload.m, payload.d)
   const venmoUrl = payload.h.v
     ? buildVenmoPayUrl(payload.h.v, payload.g, note)
@@ -45,7 +49,7 @@ export function BreakdownView({
     ? buildCashAppPayUrl(payload.h.c, payload.g)
     : null
   const paypalUrl = payload.h.p
-    ? buildPayPalPayUrl(payload.h.p, payload.g)
+    ? buildPayPalPayUrl(payload.h.p, payload.g, currency)
     : null
   const zelleHandle = payload.h.z?.trim() || ''
 
@@ -112,7 +116,7 @@ export function BreakdownView({
             <div className="ticket-due-label">
               {payload.f}&apos;s Total Due to {payload.p}
             </div>
-            <div className="ticket-due-amount">{formatCents(payload.g)}</div>
+            <div className="ticket-due-amount">{fmt(payload.g)}</div>
           </div>
         </div>
 
@@ -147,14 +151,14 @@ export function BreakdownView({
                   {splitLabel && (
                     <span
                       className="split-fraction-pill"
-                      title={`Your share of ${formatCents(itemTotalCents)}`}
+                      title={`Your share of ${fmt(itemTotalCents)}`}
                     >
-                      {splitLabel} of {formatCents(itemTotalCents)}
+                      {splitLabel} of {fmt(itemTotalCents)}
                     </span>
                   )}
                 </div>
                 <span className="mono" style={{ fontWeight: 650 }}>
-                  {formatCents(shareCents)}
+                  {fmt(shareCents)}
                 </span>
               </div>
             ))
@@ -163,35 +167,35 @@ export function BreakdownView({
           <div className="ticket-sub-rows">
             <div className="totals-row">
               <span>Items Subtotal</span>
-              <span className="mono">{formatCents(payload.s)}</span>
+              <span className="mono">{fmt(payload.s)}</span>
             </div>
             {payload.x > 0 && (
               <div className="totals-row">
                 <span>Tax</span>
-                <span className="mono">{formatCents(payload.x)}</span>
+                <span className="mono">{fmt(payload.x)}</span>
               </div>
             )}
             {payload.t > 0 && (
               <div className="totals-row">
                 <span>Tip</span>
-                <span className="mono">{formatCents(payload.t)}</span>
+                <span className="mono">{fmt(payload.t)}</span>
               </div>
             )}
             {(payload.e ?? 0) > 0 && (
               <div className="totals-row">
                 <span>Extra Fee</span>
-                <span className="mono">{formatCents(payload.e ?? 0)}</span>
+                <span className="mono">{fmt(payload.e ?? 0)}</span>
               </div>
             )}
             {(payload.k ?? 0) > 0 && (
               <div className="totals-row" style={{ color: 'var(--success)' }}>
                 <span>Discount</span>
-                <span className="mono">-{formatCents(payload.k ?? 0)}</span>
+                <span className="mono">-{fmt(payload.k ?? 0)}</span>
               </div>
             )}
             <div className="totals-row grand">
               <span>Total</span>
-              <span className="mono">{formatCents(payload.g)}</span>
+              <span className="mono">{fmt(payload.g)}</span>
             </div>
           </div>
         </div>
@@ -222,7 +226,7 @@ export function BreakdownView({
                   >
                     <span>Pay with Venmo (@{payload.h.v})</span>
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                      <span className="mono">{formatCents(payload.g)}</span>
+                      <span className="mono">{fmt(payload.g)}</span>
                       <ExternalLink size={15} />
                     </span>
                   </a>
@@ -241,11 +245,7 @@ export function BreakdownView({
                       type="button"
                       className="btn btn-ghost btn-xs"
                       onClick={() =>
-                        copyValue(
-                          centsToPlainAmount(payload.g),
-                          'amount',
-                          `amount ${formatCents(payload.g)}`
-                        )
+                        copyValue(plainAmount, 'amount', `amount ${fmt(payload.g)}`)
                       }
                     >
                       {copiedField === 'amount' ? <Check size={12} /> : <Copy size={12} />}
@@ -270,7 +270,7 @@ export function BreakdownView({
                 >
                   <span>Pay with Cash App (${payload.h.c})</span>
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                    <span className="mono">{formatCents(payload.g)}</span>
+                    <span className="mono">{fmt(payload.g)}</span>
                     <ExternalLink size={15} />
                   </span>
                 </a>
@@ -285,7 +285,7 @@ export function BreakdownView({
                 >
                   <span>Pay with PayPal.Me ({payload.h.p})</span>
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                    <span className="mono">{formatCents(payload.g)}</span>
+                    <span className="mono">{fmt(payload.g)}</span>
                     <ExternalLink size={15} />
                   </span>
                 </a>
@@ -296,7 +296,7 @@ export function BreakdownView({
                   <div className="zelle-header">
                     <span className="zelle-title">Zelle</span>
                     <span className="mono" style={{ fontWeight: 700, fontSize: '0.9rem' }}>
-                      {formatCents(payload.g)}
+                      {fmt(payload.g)}
                     </span>
                   </div>
                   <div className="zelle-handle">{zelleHandle}</div>
@@ -313,11 +313,7 @@ export function BreakdownView({
                       type="button"
                       className="btn btn-secondary btn-sm"
                       onClick={() =>
-                        copyValue(
-                          centsToPlainAmount(payload.g),
-                          'amount',
-                          `amount ${formatCents(payload.g)}`
-                        )
+                        copyValue(plainAmount, 'amount', `amount ${fmt(payload.g)}`)
                       }
                     >
                       {copiedField === 'amount' ? <Check size={14} /> : <Copy size={14} />}
@@ -339,22 +335,18 @@ export function BreakdownView({
               }}
             >
               {payload.p} hasn&apos;t added payment handles yet — pay{' '}
-              <strong className="mono">{formatCents(payload.g)}</strong> directly
-              or copy the amount below.
+              <strong className="mono">{fmt(payload.g)}</strong> directly or copy
+              the amount below.
               <div style={{ marginTop: 10 }}>
                 <button
                   type="button"
                   className="btn btn-secondary btn-sm btn-full"
                   onClick={() =>
-                    copyValue(
-                      centsToPlainAmount(payload.g),
-                      'amount',
-                      `amount ${formatCents(payload.g)}`
-                    )
+                    copyValue(plainAmount, 'amount', `amount ${fmt(payload.g)}`)
                   }
                 >
                   {copiedField === 'amount' ? <Check size={14} /> : <Copy size={14} />}
-                  <span>Copy {formatCents(payload.g)}</span>
+                  <span>Copy {fmt(payload.g)}</span>
                 </button>
               </div>
             </div>

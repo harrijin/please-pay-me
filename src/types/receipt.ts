@@ -29,6 +29,7 @@ export interface AppSettings {
   geminiApiKey: string
   geminiModel: GeminiModelOption
   customGeminiModel: string
+  defaultCurrency: string
   handles: PaymentHandles
   savedFriends: SavedFriend[]
 }
@@ -50,7 +51,7 @@ export interface ReceiptItem {
   id: string
   name: string
   quantity: number
-  /** Total line price in integer cents */
+  /** Total line price in integer hundredths of the major currency unit */
   priceCents: number
   /** Map of personId -> positive share weight (default 1) */
   shares: Record<string, number>
@@ -60,6 +61,8 @@ export interface ReceiptSplit {
   id: string
   merchant: string
   date: string
+  /** ISO 4217 currency code (defaults to 'USD') */
+  currency?: string
   items: ReceiptItem[]
   taxCents: number
   tipCents: number
@@ -115,6 +118,7 @@ export interface SharePayload {
   v: 1
   m: string // merchant
   d: string // date
+  c?: string // ISO currency code (omitted when USD)
   p: string // payer name
   f: string // friend name
   /** [itemName, itemTotalCents, friendShareCents, splitLabel] */
@@ -136,6 +140,7 @@ export interface SharePayload {
 export interface ScannedReceiptRaw {
   merchant: string
   date: string
+  currency?: string
   items: Array<{
     name: string
     quantity: number

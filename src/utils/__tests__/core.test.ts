@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AppSettings, PaymentHandles, ReceiptSplit } from '../../types/receipt'
+import { formatCents } from '../format'
 import {
   buildCashAppPayUrl,
   buildPaymentNote,
@@ -161,6 +162,7 @@ describe('paymentLinks', () => {
       geminiApiKey: '',
       geminiModel: 'gemini-3.5-flash-lite',
       customGeminiModel: '',
+      defaultCurrency: 'USD',
       handles: {
         venmo: 'my-own-venmo',
         cashApp: 'mycash',
@@ -213,6 +215,67 @@ describe('paymentLinks', () => {
       paypal: 'mypaypal',
       zelle: 'me@example.com',
     })
+  })
+
+  it('supports non-USD and 0-decimal currencies (JPY, EUR) accurately', () => {
+    expect(formatCents(1250, 'EUR')).toBe('€12.50')
+    expect(formatCents(100000, 'JPY')).toBe('¥1,000')
+    expect(buildPayPalPayUrl('harrijin', 2550, 'EUR')).toBe(
+      'https://paypal.me/harrijin/25.50EUR'
+    )
+    expect(buildPayPalPayUrl('harrijin', 150000, 'JPY')).toBe(
+      'https://paypal.me/harrijin/1500JPY'
+    )
+
+    // ¥1,000 split 3 ways must allocate whole yen: 334, 333, 333 (sum = 1000)
+    const jpyReceipt: ReceiptSplit = {
+      id: 's_jpy',
+      merchant: 'Ichiran Ramen',
+      date: '2026-11-26',
+      currency: 'JPY',
+      people: [
+        { id: 'p1', name: 'A', color: '#0f766e' },
+        { id: 'p2', name: 'B', color: '#c2410c' },
+        { id: 'p3', name: 'C', color: '#1d4ed8' },
+      ],
+      payerId: 'p1',
+      items: [
+        {
+          id: 'i1',
+          name: 'Gyoza Platter',
+          quantity: 1,
+          priceCents: 100000, // ¥1,000
+          shares: { p1: 1, p2: 1, p3: 1 },
+        },
+      ],
+      taxCents: 0,
+      tipCents: 0,
+      extraFeeCents: 0,
+      discountCents: 0,
+      taxTipMode: 'proportional',
+      createdAt: 1,
+      updatedAt: 1,
+    }
+    const summary = calculateSplit(jpyReceipt)
+    expect(summary.breakdowns.map((b) => b.totalCents)).toEqual([
+      33400, 33300, 33300,
+    ])
+    expect(summary.breakdowns.map((b) => formatCents(b.totalCents, 'JPY'))).toEqual([
+      '¥334',
+      '¥333',
+      '¥333',
+    ])
+
+    const payload = createSharePayload(
+      jpyReceipt,
+      summary.breakdowns[1],
+      'A',
+      { venmo: '', cashApp: '', paypal: 'a_pay', zelle: '' }
+    )
+    const url = buildShareUrl(payload, 'https://harrijin.github.io/please-pay-me/')
+    const decoded = decodeShareHash(url.slice(url.indexOf('#')))
+    expect(decoded?.c).toBe('JPY')
+    expect(decoded?.g).toBe(33300)
   })
 })
 

@@ -5,21 +5,30 @@ import type {
   ReceiptSplit,
   SplitSummary,
 } from '../types/receipt'
-import { formatWeightFraction, generateId } from './format'
+import {
+  formatWeightFraction,
+  generateId,
+  getCurrencyUnitStep,
+} from './format'
 
 /**
- * Largest-remainder (Hamilton) integer cent allocator.
- * Guarantees that the returned cents sum strictly to `totalCents`.
+ * Largest-remainder (Hamilton) integer allocator.
+ * Guarantees that the returned values sum strictly to `totalCents` (aligned to `unitStep`).
  */
-export function allocateCents(totalCents: number, weights: number[]): number[] {
+export function allocateCents(
+  totalCents: number,
+  weights: number[],
+  unitStep = 1
+): number[] {
   const count = weights.length
   if (count === 0) return []
 
-  const roundedTotal = Math.round(totalCents)
-  if (roundedTotal === 0) return new Array(count).fill(0)
+  const step = Math.max(1, Math.round(unitStep))
+  const totalUnits = Math.round(totalCents / step)
+  if (totalUnits === 0) return new Array(count).fill(0)
 
-  const sign = roundedTotal < 0 ? -1 : 1
-  const absTotal = Math.abs(roundedTotal)
+  const sign = totalUnits < 0 ? -1 : 1
+  const absTotal = Math.abs(totalUnits)
 
   const safeWeights = weights.map((w) => (Number.isFinite(w) && w > 0 ? w : 0))
   const weightSum = safeWeights.reduce((acc, w) => acc + w, 0)
@@ -27,7 +36,7 @@ export function allocateCents(totalCents: number, weights: number[]): number[] {
 
   const exact = safeWeights.map((w) => (absTotal * w) / weightSum)
   const floors = exact.map((val) => Math.floor(val))
-  let remainder = absTotal - floors.reduce((acc, f) => acc + f, 0)
+  const remainder = absTotal - floors.reduce((acc, f) => acc + f, 0)
 
   const ranked = exact
     .map((val, index) => ({
@@ -47,17 +56,22 @@ export function allocateCents(totalCents: number, weights: number[]): number[] {
     floors[ranked[i].index] += 1
   }
 
-  return floors.map((v) => v * sign)
+  return floors.map((v) => v * sign * step)
 }
 
 /**
  * Splits a multi-quantity item into N individual single-quantity items,
- * distributing exact cents so the total never drifts by even 1 cent.
+ * distributing exact minor units so the total never drifts.
  */
-export function splitItemIntoCount(item: ReceiptItem, count: number): ReceiptItem[] {
+export function splitItemIntoCount(
+  item: ReceiptItem,
+  count: number,
+  currencyCode?: string
+): ReceiptItem[] {
   const n = Math.max(2, Math.min(20, Math.round(count)))
   const weights = new Array<number>(n).fill(1)
-  const parts = allocateCents(item.priceCents, weights)
+  const step = getCurrencyUnitStep(currencyCode)
+  const parts = allocateCents(item.priceCents, weights, step)
   const baseName = item.name.replace(/^\d+\s*[x×]\s*/i, '').trim() || item.name
 
   return parts.map((partCents, idx) => ({
@@ -70,9 +84,10 @@ export function splitItemIntoCount(item: ReceiptItem, count: number): ReceiptIte
 }
 
 /**
- * Calculates full exact-cent breakdown for every person on a receipt.
+ * Calculates full exact-unit breakdown for every person on a receipt.
  */
 export function calculateSplit(receipt: ReceiptSplit): SplitSummary {
+  const step = getCurrencyUnitStep(receipt.currency)
   const people = receipt.people
   const peopleIndex = new Map<string, number>()
   people.forEach((p, idx) => peopleIndex.set(p.id, idx))
@@ -86,7 +101,7 @@ export function calculateSplit(receipt: ReceiptSplit): SplitSummary {
   const unassignedItemIds: string[] = []
 
   for (const item of receipt.items) {
-    const price = Math.round(item.priceCents)
+    const price = Math.round(item.priceCents / step) * step
     itemsSubtotalCents += price
 
     const activeEntries = people
@@ -107,7 +122,8 @@ export function calculateSplit(receipt: ReceiptSplit): SplitSummary {
     const totalWeight = activeEntries.reduce((sum, e) => sum + e.weight, 0)
     const allocated = allocateCents(
       price,
-      activeEntries.map((e) => e.weight)
+      activeEntries.map((e) => e.weight),
+      step
     )
 
     activeEntries.forEach((entry, i) => {
@@ -139,7 +155,6 @@ export function calculateSplit(receipt: ReceiptSplit): SplitSummary {
       ? participatingMask
       : people.map(() => 1)
   } else {
-    // Proportional to item subtotal (fall back to even across people if subtotals are all 0)
     const subtotalSum = perPersonSubtotal.reduce((a, b) => a + Math.max(0, b), 0)
     if (subtotalSum > 0) {
       adjustmentWeights = perPersonSubtotal.map((s) => Math.max(0, s))
@@ -150,15 +165,15 @@ export function calculateSplit(receipt: ReceiptSplit): SplitSummary {
     }
   }
 
-  const taxCents = Math.max(0, Math.round(receipt.taxCents))
-  const tipCents = Math.max(0, Math.round(receipt.tipCents))
-  const extraFeeCents = Math.max(0, Math.round(receipt.extraFeeCents))
-  const discountCents = Math.max(0, Math.round(receipt.discountCents))
+  const taxCents = Math.max(0, Math.round(receipt.taxCents / step) * step)
+  const tipCents = Math.max(0, Math.round(receipt.tipCents / step) * step)
+  const extraFeeCents = Math.max(0, Math.round(receipt.extraFeeCents / step) * step)
+  const discountCents = Math.max(0, Math.round(receipt.discountCents / step) * step)
 
-  const taxAlloc = allocateCents(taxCents, adjustmentWeights)
-  const tipAlloc = allocateCents(tipCents, adjustmentWeights)
-  const feeAlloc = allocateCents(extraFeeCents, adjustmentWeights)
-  const discountAlloc = allocateCents(discountCents, adjustmentWeights)
+  const taxAlloc = allocateCents(taxCents, adjustmentWeights, step)
+  const tipAlloc = allocateCents(tipCents, adjustmentWeights, step)
+  const feeAlloc = allocateCents(extraFeeCents, adjustmentWeights, step)
+  const discountAlloc = allocateCents(discountCents, adjustmentWeights, step)
 
   const breakdowns: PersonBreakdown[] = people.map((person, idx) => {
     const sub = perPersonSubtotal[idx]

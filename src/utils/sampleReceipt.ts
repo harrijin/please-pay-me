@@ -1,5 +1,12 @@
 import type { AppSettings, Person, ReceiptSplit, ScannedReceiptRaw } from '../types/receipt'
-import { dollarsToCents, generateId, pickPersonColor, todayIsoDate } from './format'
+import {
+  CURRENCY_OPTIONS,
+  dollarsToCents,
+  generateId,
+  normalizeCurrencyCode,
+  pickPersonColor,
+  todayIsoDate,
+} from './format'
 
 export function createSampleReceipt(settings: AppSettings): ReceiptSplit {
   const now = Date.now()
@@ -96,6 +103,7 @@ export function createBlankReceipt(settings: AppSettings): ReceiptSplit {
     id: generateId('split'),
     merchant: '',
     date: todayIsoDate(),
+    currency: normalizeCurrencyCode(settings.defaultCurrency),
     people: [
       { id: meId, name: settings.userName.trim() || 'Me', color: pickPersonColor(0), isSelf: true },
       { id: friendId, name: 'Friend 1', color: pickPersonColor(1) },
@@ -151,10 +159,19 @@ export function createReceiptFromScan(
     })
   }
 
+  const detected = raw.currency?.trim().toUpperCase()
+  const isKnownDetected = Boolean(
+    detected && CURRENCY_OPTIONS.some((c) => c.code === detected)
+  )
+  const currency = isKnownDetected
+    ? (detected as string)
+    : normalizeCurrencyCode(settings.defaultCurrency)
+
   return {
     id: generateId('split'),
     merchant: raw.merchant || 'Scanned Receipt',
     date: raw.date || todayIsoDate(),
+    currency,
     people,
     payerId: meId,
     items:

@@ -96,6 +96,9 @@ export function CollectView({
     .reduce((sum, b) => sum + b.totalCents, 0)
   const remainingCents = Math.max(0, totalToCollectCents - collectedCents)
 
+  const currency = receipt.currency
+  const fmt = (cents: number) => formatCents(cents, currency)
+
   const note = buildPaymentNote(receipt.merchant, receipt.date)
   const hasHandles = hasAnyPaymentHandle(payerHandles)
 
@@ -108,6 +111,7 @@ export function CollectView({
       handles: payerHandles,
       amountCents: b.totalCents,
       note,
+      currencyCode: currency,
     })
     const venmoChargeUrl = buildVenmoChargeUrl(
       b.person.venmo,
@@ -117,7 +121,8 @@ export function CollectView({
     const directPayPayerUrl =
       (payerHandles.venmo && buildVenmoPayUrl(payerHandles.venmo, b.totalCents, note)) ||
       (payerHandles.cashApp && buildCashAppPayUrl(payerHandles.cashApp, b.totalCents)) ||
-      (payerHandles.paypal && buildPayPalPayUrl(payerHandles.paypal, b.totalCents)) ||
+      (payerHandles.paypal &&
+        buildPayPalPayUrl(payerHandles.paypal, b.totalCents, currency)) ||
       null
     return { payload, breakdownUrl, resolved, venmoChargeUrl, directPayPayerUrl }
   }
@@ -137,8 +142,8 @@ export function CollectView({
 
   const handleNativeShare = async (b: PersonBreakdown) => {
     const { resolved } = getFriendLinks(b)
-    const shareTitle = `${receipt.merchant || 'Receipt'} — ${formatCents(b.totalCents)}`
-    const shareText = `Hey ${b.person.name}, here's your share (${formatCents(
+    const shareTitle = `${receipt.merchant || 'Receipt'} — ${fmt(b.totalCents)}`
+    const shareText = `Hey ${b.person.name}, here's your share (${fmt(
       b.totalCents
     )}) for ${receipt.merchant || 'our bill'}:`
 
@@ -188,6 +193,7 @@ export function CollectView({
         return {
           personName: b.person.name,
           amountCents: b.totalCents,
+          currency,
           url: resolved.url,
           destinationLabel: resolved.label,
           merchant: receipt.merchant || 'Shared Receipt',
@@ -196,7 +202,7 @@ export function CollectView({
         }
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [friendBreakdowns, destination, payerHandles, receipt.merchant, receipt.date]
+    [friendBreakdowns, destination, payerHandles, receipt.merchant, receipt.date, currency]
   )
 
   return (
@@ -257,19 +263,19 @@ export function CollectView({
           <div className="metric-box">
             <div className="metric-label">Bill Total</div>
             <div className="metric-value">
-              {formatCents(summary.grandTotalCents)}
+              {fmt(summary.grandTotalCents)}
             </div>
           </div>
           <div className="metric-box">
             <div className="metric-label">Collected</div>
             <div className="metric-value accent">
-              {formatCents(collectedCents)}
+              {fmt(collectedCents)}
             </div>
           </div>
           <div className="metric-box">
             <div className="metric-label">Remaining</div>
             <div className="metric-value">
-              {formatCents(remainingCents)}
+              {fmt(remainingCents)}
             </div>
           </div>
         </div>
@@ -506,7 +512,7 @@ export function CollectView({
 
                 <div style={{ textAlign: 'right' }}>
                   <div className={`friend-amount ${isPaid ? 'paid' : ''}`}>
-                    {formatCents(b.totalCents)}
+                    {fmt(b.totalCents)}
                   </div>
                   <button
                     type="button"
@@ -537,37 +543,37 @@ export function CollectView({
                             <span className="split-fraction-pill">{line.splitLabel}</span>
                           )}
                         </span>
-                        <span className="mono">{formatCents(line.shareCents)}</span>
+                        <span className="mono">{fmt(line.shareCents)}</span>
                       </div>
                     ))
                   )}
                   <hr className="receipt-divider" style={{ margin: '8px 0' }} />
                   <div className="mini-line" style={{ color: 'var(--ink-muted)' }}>
                     <span>Subtotal</span>
-                    <span className="mono">{formatCents(b.subtotalCents)}</span>
+                    <span className="mono">{fmt(b.subtotalCents)}</span>
                   </div>
                   {b.taxCents > 0 && (
                     <div className="mini-line" style={{ color: 'var(--ink-muted)' }}>
                       <span>Tax</span>
-                      <span className="mono">{formatCents(b.taxCents)}</span>
+                      <span className="mono">{fmt(b.taxCents)}</span>
                     </div>
                   )}
                   {b.tipCents > 0 && (
                     <div className="mini-line" style={{ color: 'var(--ink-muted)' }}>
                       <span>Tip</span>
-                      <span className="mono">{formatCents(b.tipCents)}</span>
+                      <span className="mono">{fmt(b.tipCents)}</span>
                     </div>
                   )}
                   {b.extraFeeCents > 0 && (
                     <div className="mini-line" style={{ color: 'var(--ink-muted)' }}>
                       <span>Fee</span>
-                      <span className="mono">{formatCents(b.extraFeeCents)}</span>
+                      <span className="mono">{fmt(b.extraFeeCents)}</span>
                     </div>
                   )}
                   {b.discountCents > 0 && (
                     <div className="mini-line" style={{ color: 'var(--success)' }}>
                       <span>Discount</span>
-                      <span className="mono">-{formatCents(b.discountCents)}</span>
+                      <span className="mono">-{fmt(b.discountCents)}</span>
                     </div>
                   )}
                 </div>
@@ -697,7 +703,7 @@ export function CollectView({
               </div>
             </div>
             <div className="friend-amount">
-              {formatCents(payerBreakdown.totalCents)}
+              {fmt(payerBreakdown.totalCents)}
             </div>
           </div>
         </article>

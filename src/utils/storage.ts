@@ -1,4 +1,5 @@
 import type { AppSettings, ReceiptSplit } from '../types/receipt'
+import { DEFAULT_CURRENCY, normalizeCurrencyCode } from './format'
 
 const SETTINGS_KEY = 'pleasepayme_settings_v1'
 const SPLITS_KEY = 'pleasepayme_recent_splits_v1'
@@ -9,6 +10,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   geminiApiKey: '',
   geminiModel: 'gemini-3.5-flash-lite',
   customGeminiModel: '',
+  defaultCurrency: DEFAULT_CURRENCY,
   handles: {
     venmo: '',
     cashApp: '',
@@ -35,6 +37,7 @@ export function loadSettings(): AppSettings {
           : 'gemini-3.5-flash-lite',
       customGeminiModel:
         typeof parsed.customGeminiModel === 'string' ? parsed.customGeminiModel : '',
+      defaultCurrency: normalizeCurrencyCode(parsed.defaultCurrency),
       handles: {
         venmo: typeof parsed.handles?.venmo === 'string' ? parsed.handles.venmo : '',
         cashApp: typeof parsed.handles?.cashApp === 'string' ? parsed.handles.cashApp : '',

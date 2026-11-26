@@ -5,7 +5,7 @@ import type {
   QRDestination,
   ReceiptSplit,
 } from '../types/receipt'
-import { centsToPlainAmount } from './format'
+import { centsToPlainAmount, normalizeCurrencyCode } from './format'
 
 export function cleanVenmoHandle(raw?: string): string {
   if (!raw) return ''
@@ -98,11 +98,13 @@ export function buildCashAppPayUrl(
 
 export function buildPayPalPayUrl(
   paypalUser: string,
-  amountCents: number
+  amountCents: number,
+  currencyCode?: string
 ): string | null {
   const clean = cleanPayPalHandle(paypalUser)
   if (!clean) return null
-  return `https://paypal.me/${encodeURIComponent(clean)}/${centsToPlainAmount(amountCents)}USD`
+  const code = normalizeCurrencyCode(currencyCode)
+  return `https://paypal.me/${encodeURIComponent(clean)}/${centsToPlainAmount(amountCents, code)}${code}`
 }
 
 export function buildPaymentNote(merchant: string, date?: string): string {
@@ -205,8 +207,10 @@ export function resolveDestinationUrl(options: {
   handles: PaymentHandles
   amountCents: number
   note: string
+  currencyCode?: string
 }): { url: string; label: string; isFallback: boolean } {
-  const { destination, breakdownUrl, handles, amountCents, note } = options
+  const { destination, breakdownUrl, handles, amountCents, note, currencyCode } =
+    options
 
   if (destination === 'venmo') {
     const venmoUrl = buildVenmoPayUrl(handles.venmo, amountCents, note)
@@ -233,7 +237,7 @@ export function resolveDestinationUrl(options: {
   }
 
   if (destination === 'paypal') {
-    const paypalUrl = buildPayPalPayUrl(handles.paypal, amountCents)
+    const paypalUrl = buildPayPalPayUrl(handles.paypal, amountCents, currencyCode)
     if (paypalUrl) {
       return { url: paypalUrl, label: 'Direct to PayPal.Me', isFallback: false }
     }

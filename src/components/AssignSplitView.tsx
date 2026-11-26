@@ -28,10 +28,13 @@ import type {
   TaxTipMode,
 } from '../types/receipt'
 import {
+  CURRENCY_OPTIONS,
   dollarsToCents,
   formatCents,
   formatWeightFraction,
   generateId,
+  getCurrencyInfo,
+  getCurrencyUnitStep,
   getInitials,
   pickPersonColor,
 } from '../utils/format'
@@ -62,13 +65,15 @@ function MoneyInput({
   id,
   cents,
   onChangeCents,
-  placeholder = '0.00',
+  decimals = 2,
+  placeholder,
   ariaLabel,
   compact = false,
 }: {
   id?: string
   cents: number
   onChangeCents: (cents: number) => void
+  decimals?: 0 | 2
   placeholder?: string
   ariaLabel: string
   compact?: boolean
@@ -76,24 +81,33 @@ function MoneyInput({
   const [focused, setFocused] = useState(false)
   const [draft, setDraft] = useState('')
 
-  const displayValue = focused ? draft : cents === 0 ? '' : (cents / 100).toFixed(2)
+  const formatted =
+    cents === 0
+      ? ''
+      : decimals === 0
+        ? String(Math.round(cents / 100))
+        : (cents / 100).toFixed(2)
+  const displayValue = focused ? draft : formatted
+  const inputPlaceholder = placeholder ?? (decimals === 0 ? '0' : '0.00')
 
   return (
     <input
       id={id}
       type="text"
-      inputMode="decimal"
+      inputMode={decimals === 0 ? 'numeric' : 'decimal'}
       aria-label={ariaLabel}
-      placeholder={placeholder}
+      placeholder={inputPlaceholder}
       className={`input input-money ${compact ? 'input-compact' : ''}`}
       value={displayValue}
       onFocus={() => {
         setFocused(true)
-        setDraft(cents === 0 ? '' : (cents / 100).toFixed(2))
+        setDraft(formatted)
       }}
       onChange={(e) => {
         const val = e.target.value
-        if (/^[0-9]*\.?[0-9]{0,2}$/.test(val)) {
+        const pattern =
+          decimals === 0 ? /^[0-9]*$/ : /^[0-9]*\.?[0-9]{0,2}$/
+        if (pattern.test(val)) {
           setDraft(val)
           onChangeCents(val === '' ? 0 : dollarsToCents(val))
         }
@@ -260,8 +274,12 @@ export function AssignSplitView({
     handleUpdateItem(item.id, { shares: nextShares })
   }
 
+  const currencyInfo = getCurrencyInfo(receipt.currency)
+  const currencyUnitStep = getCurrencyUnitStep(receipt.currency)
+  const fmt = (cents: number) => formatCents(cents, currencyInfo.code)
+
   const handleSplitByQty = (item: ReceiptItem, count: number) => {
-    const parts = splitItemIntoCount(item, count)
+    const parts = splitItemIntoCount(item, count, currencyInfo.code)
     const idx = receipt.items.findIndex((it) => it.id === item.id)
     if (idx === -1) return
     const nextItems = [
@@ -291,7 +309,9 @@ export function AssignSplitView({
   }
 
   const applyTipPercent = (pct: number) => {
-    const tipCents = Math.round((summary.itemsSubtotalCents * pct) / 100)
+    const rawCents = (summary.itemsSubtotalCents * pct) / 100
+    const tipCents =
+      Math.round(rawCents / currencyUnitStep) * currencyUnitStep
     updateReceipt({ tipCents })
   }
 
@@ -457,6 +477,36 @@ export function AssignSplitView({
             />
           </div>
         </div>
+
+        <details className="advanced-inline">
+          <summary className="advanced-inline-summary">
+            <span>
+              Advanced
+              {currencyInfo.code !== 'USD' && (
+                <span className="mono" style={{ marginLeft: 6, color: 'var(--accent)' }}>
+                  · {currencyInfo.code} ({currencyInfo.symbol.trim()})
+                </span>
+              )}
+            </span>
+          </summary>
+          <div style={{ marginTop: 10 }}>
+            <label htmlFor="receipt-currency-select" className="field-label">
+              Receipt Currency
+            </label>
+            <select
+              id="receipt-currency-select"
+              className="select input-compact"
+              value={currencyInfo.code}
+              onChange={(e) => updateReceipt({ currency: e.target.value })}
+            >
+              {CURRENCY_OPTIONS.map((c) => (
+                <option key={c.code} value={c.code}>
+                  {c.code} ({c.symbol.trim()}) — {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </details>
       </section>
 
       {/* People & Who Paid */}
@@ -810,7 +860,8 @@ export function AssignSplitView({
               activePeople.length > 0
                 ? allocateCents(
                     item.priceCents,
-                    activePeople.map((p) => item.shares[p.id] ?? 1)
+                    activePeople.map((p) => item.shares[p.id] ?? 1),
+                    currencyUnitStep
                   )
                 : []
 
@@ -832,6 +883,7 @@ export function AssignSplitView({
                   />
                   <MoneyInput
                     cents={item.priceCents}
+                    decimals={currencyInfo.decimals}
                     onChangeCents={(priceCents) =>
                       handleUpdateItem(item.id, { priceCents })
                     }
@@ -983,7 +1035,7 @@ export function AssignSplitView({
                               className="mono"
                               style={{ fontSize: '0.76rem', color: 'var(--ink-muted)' }}
                             >
-                              {frac} · {formatCents(shareCents)}
+                              {frac} · {fmt(shareCents)}
                             </span>
                           </div>
 
@@ -1049,11 +1101,12 @@ export function AssignSplitView({
         <div className="adjustments-grid">
           <div>
             <label htmlFor="tax-input" className="field-label">
-              Tax ($)
+              Tax ({currencyInfo.symbol.trim()})
             </label>
             <MoneyInput
               id="tax-input"
               cents={receipt.taxCents}
+              decimals={currencyInfo.decimals}
               onChangeCents={(taxCents) => updateReceipt({ taxCents })}
               ariaLabel="Tax amount"
             />
@@ -1061,7 +1114,7 @@ export function AssignSplitView({
 
           <div>
             <label htmlFor="tip-input" className="field-label">
-              Tip ($){' '}
+              Tip ({currencyInfo.symbol.trim()}){' '}
               {summary.itemsSubtotalCents > 0 && receipt.tipCents > 0 && (
                 <span className="mono" style={{ color: 'var(--accent)', marginLeft: 4 }}>
                   ~{currentTipPct}%
@@ -1071,6 +1124,7 @@ export function AssignSplitView({
             <MoneyInput
               id="tip-input"
               cents={receipt.tipCents}
+              decimals={currencyInfo.decimals}
               onChangeCents={(tipCents) => updateReceipt({ tipCents })}
               ariaLabel="Tip amount"
             />
@@ -1079,7 +1133,9 @@ export function AssignSplitView({
 
         <div className="tip-presets" aria-label="Tip percentage presets">
           {[0, 15, 18, 20, 25].map((pct) => {
-            const presetCents = Math.round((summary.itemsSubtotalCents * pct) / 100)
+            const presetCents =
+              Math.round(((summary.itemsSubtotalCents * pct) / 100) / currencyUnitStep) *
+              currencyUnitStep
             const isActive =
               summary.itemsSubtotalCents > 0 && receipt.tipCents === presetCents
             return (
@@ -1100,22 +1156,24 @@ export function AssignSplitView({
         <div className="adjustments-grid">
           <div>
             <label htmlFor="fee-input" className="field-label">
-              Extra Fee / Service ($)
+              Extra Fee / Service ({currencyInfo.symbol.trim()})
             </label>
             <MoneyInput
               id="fee-input"
               cents={receipt.extraFeeCents}
+              decimals={currencyInfo.decimals}
               onChangeCents={(extraFeeCents) => updateReceipt({ extraFeeCents })}
               ariaLabel="Extra fee amount"
             />
           </div>
           <div>
             <label htmlFor="discount-input" className="field-label">
-              Discount / Coupon ($)
+              Discount / Coupon ({currencyInfo.symbol.trim()})
             </label>
             <MoneyInput
               id="discount-input"
               cents={receipt.discountCents}
+              decimals={currencyInfo.decimals}
               onChangeCents={(discountCents) => updateReceipt({ discountCents })}
               ariaLabel="Discount amount"
             />
@@ -1127,37 +1185,37 @@ export function AssignSplitView({
         <div className="totals-summary-list">
           <div className="totals-row">
             <span>Items Subtotal</span>
-            <span className="mono">{formatCents(summary.itemsSubtotalCents)}</span>
+            <span className="mono">{fmt(summary.itemsSubtotalCents)}</span>
           </div>
           {summary.taxCents > 0 && (
             <div className="totals-row">
               <span>Tax ({receipt.taxTipMode})</span>
-              <span className="mono">{formatCents(summary.taxCents)}</span>
+              <span className="mono">{fmt(summary.taxCents)}</span>
             </div>
           )}
           {summary.tipCents > 0 && (
             <div className="totals-row">
               <span>Tip ({receipt.taxTipMode})</span>
-              <span className="mono">{formatCents(summary.tipCents)}</span>
+              <span className="mono">{fmt(summary.tipCents)}</span>
             </div>
           )}
           {summary.extraFeeCents > 0 && (
             <div className="totals-row">
               <span>Extra Fee</span>
-              <span className="mono">{formatCents(summary.extraFeeCents)}</span>
+              <span className="mono">{fmt(summary.extraFeeCents)}</span>
             </div>
           )}
           {summary.discountCents > 0 && (
             <div className="totals-row">
               <span>Discount</span>
               <span className="mono" style={{ color: 'var(--success)' }}>
-                -{formatCents(summary.discountCents)}
+                -{fmt(summary.discountCents)}
               </span>
             </div>
           )}
           <div className="totals-row grand">
             <span>Receipt Total</span>
-            <span className="mono">{formatCents(summary.grandTotalCents)}</span>
+            <span className="mono">{fmt(summary.grandTotalCents)}</span>
           </div>
         </div>
       </section>
@@ -1168,11 +1226,11 @@ export function AssignSplitView({
           <div>
             <div className="sticky-total-label">
               {summary.unassignedItemIds.length > 0
-                ? `${formatCents(summary.unassignedSubtotalCents)} unassigned`
-                : 'Exact-cent split ready'}
+                ? `${fmt(summary.unassignedSubtotalCents)} unassigned`
+                : 'Exact split ready'}
             </div>
             <div className="sticky-total-amount">
-              {formatCents(summary.grandTotalCents)}
+              {fmt(summary.grandTotalCents)}
             </div>
           </div>
 

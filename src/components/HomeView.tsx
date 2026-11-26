@@ -232,7 +232,7 @@ export function HomeView({
 
                   <div className="recent-right">
                     <span className="recent-total">
-                      {formatCents(summary.grandTotalCents)}
+                      {formatCents(summary.grandTotalCents, split.currency)}
                     </span>
                     <button
                       type="button"

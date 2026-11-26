@@ -21,7 +21,7 @@ import type {
   GeminiModelOption,
   SavedFriend,
 } from '../types/receipt'
-import { generateId } from '../utils/format'
+import { CURRENCY_OPTIONS, generateId } from '../utils/format'
 import {
   GEMINI_MODELS,
   resolveModelId,
@@ -642,6 +642,38 @@ export function SettingsView({
             </div>
           )}
         </section>
+
+        {/* Tucked-away Advanced section */}
+        <details className="advanced-card">
+          <summary className="advanced-summary">
+            <span>Advanced</span>
+            <span className="mono" style={{ fontSize: '0.76rem', color: 'var(--ink-muted)' }}>
+              Default currency: {settings.defaultCurrency || 'USD'}
+            </span>
+          </summary>
+          <div style={{ marginTop: 12 }}>
+            <label htmlFor="default-currency-select" className="field-label">
+              Default Currency
+            </label>
+            <select
+              id="default-currency-select"
+              className="select"
+              value={settings.defaultCurrency || 'USD'}
+              onChange={(e) => update({ defaultCurrency: e.target.value })}
+            >
+              {CURRENCY_OPTIONS.map((c) => (
+                <option key={c.code} value={c.code}>
+                  {c.code} ({c.symbol.trim()}) — {c.name}
+                </option>
+              ))}
+            </select>
+            <p className="field-hint">
+              Used for new receipts when a scanned receipt doesn&apos;t specify a
+              currency. You can also override currency per receipt under
+              Advanced on the Assign Items screen.
+            </p>
+          </div>
+        </details>
       </div>
     </div>
   )

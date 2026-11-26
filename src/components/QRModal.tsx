@@ -6,6 +6,7 @@ import { formatCents } from '../utils/format'
 export interface QRFriendItem {
   personName: string
   amountCents: number
+  currency?: string
   url: string
   destinationLabel: string
   merchant: string
@@ -91,7 +92,9 @@ export function QRModal({
       <div className="qr-stage">
         <div>
           <div className="qr-friend-name">{active.personName}</div>
-          <div className="qr-amount-hero">{formatCents(active.amountCents)}</div>
+          <div className="qr-amount-hero">
+            {formatCents(active.amountCents, active.currency)}
+          </div>
         </div>
 
         <span className="qr-dest-badge">{active.destinationLabel}</span>

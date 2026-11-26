@@ -46,6 +46,11 @@ const RECEIPT_RESPONSE_SCHEMA = {
       type: 'STRING',
       description: 'Receipt date formatted as YYYY-MM-DD if visible, otherwise empty string.',
     },
+    currency: {
+      type: 'STRING',
+      description:
+        '3-letter ISO 4217 currency code if clearly indicated on the receipt (e.g., USD, EUR, GBP, JPY, CAD), otherwise empty string.',
+    },
     items: {
       type: 'ARRAY',
       description:
@@ -219,6 +224,7 @@ export async function scanReceiptWithGemini(options: {
   return {
     merchant: String(parsed.merchant ?? '').trim() || 'Scanned Receipt',
     date: String(parsed.date ?? '').trim() || todayIsoDate(),
+    currency: String(parsed.currency ?? '').trim().toUpperCase() || undefined,
     items,
     tax: Math.max(0, Number(parsed.tax ?? 0) || 0),
     tip: Math.max(0, Number(parsed.tip ?? 0) || 0),

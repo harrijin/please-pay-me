@@ -5,6 +5,7 @@ import type {
   ReceiptSplit,
   SharePayload,
 } from '../types/receipt'
+import { DEFAULT_CURRENCY, normalizeCurrencyCode } from './format'
 import {
   cleanCashAppHandle,
   cleanPayPalHandle,
@@ -36,6 +37,7 @@ export function createSharePayload(
   if (paypal) safeHandles.p = paypal
   if (zelle) safeHandles.z = zelle
 
+  const currency = normalizeCurrencyCode(receipt.currency)
   const payload: SharePayload = {
     v: 1,
     m: receipt.merchant.trim() || 'Shared Receipt',
@@ -55,6 +57,9 @@ export function createSharePayload(
     h: safeHandles,
   }
 
+  if (currency !== DEFAULT_CURRENCY) {
+    payload.c = currency
+  }
   if (breakdown.extraFeeCents > 0) {
     payload.e = breakdown.extraFeeCents
   }
@@ -102,10 +107,13 @@ export function decodeShareHash(hash: string): SharePayload | null {
       return null
     }
 
+    const currency = parsed.c ? normalizeCurrencyCode(parsed.c) : undefined
+
     return {
       v: 1,
       m: parsed.m,
       d: typeof parsed.d === 'string' ? parsed.d : '',
+      ...(currency && currency !== DEFAULT_CURRENCY ? { c: currency } : {}),
       p: typeof parsed.p === 'string' ? parsed.p : 'Your Friend',
       f: parsed.f,
       i: parsed.i
