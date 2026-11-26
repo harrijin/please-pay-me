@@ -42,6 +42,7 @@ import {
   cleanZelleHandle,
 } from '../utils/paymentLinks'
 import { allocateCents, splitItemIntoCount } from '../utils/splitMath'
+import { ZoomableReceiptImage } from './ZoomableReceiptImage'
 
 interface AssignSplitViewProps {
   receipt: ReceiptSplit
@@ -385,9 +386,9 @@ export function AssignSplitView({
                 id="pin-zoom-in-btn"
                 className="btn btn-secondary btn-xs"
                 style={{ padding: '4px 7px' }}
-                disabled={receiptZoom >= 3}
+                disabled={receiptZoom >= 4}
                 onClick={() =>
-                  setReceiptZoom((z) => Math.min(3, Number((z + 0.5).toFixed(2))))
+                  setReceiptZoom((z) => Math.min(4, Number((z + 0.5).toFixed(2))))
                 }
                 aria-label="Zoom in pinned receipt"
               >
@@ -414,20 +415,16 @@ export function AssignSplitView({
               </button>
             </div>
           </div>
-          <div className="receipt-pin-scroll">
-            <img
-              src={receiptImageUrl}
-              alt="Cropped receipt reference"
-              className="receipt-pin-img"
-              style={{
-                width: `${receiptZoom * 100}%`,
-                maxWidth: 'none',
-              }}
-              onDoubleClick={() =>
-                setReceiptZoom((z) => (z > 1 ? 1 : 2))
-              }
-            />
-          </div>
+          <ZoomableReceiptImage
+            src={receiptImageUrl}
+            alt="Cropped receipt reference"
+            scale={receiptZoom}
+            minScale={1}
+            maxScale={4}
+            onScaleChange={setReceiptZoom}
+            className="receipt-pin-viewport"
+            showHint
+          />
         </section>
       )}
 
@@ -1257,9 +1254,9 @@ export function AssignSplitView({
               type="button"
               className="qr-nav-btn"
               style={{ minHeight: 36, padding: '6px 12px' }}
-              disabled={receiptZoom >= 3}
+              disabled={receiptZoom >= 4}
               onClick={() =>
-                setReceiptZoom((z) => Math.min(3, Number((z + 0.5).toFixed(2))))
+                setReceiptZoom((z) => Math.min(4, Number((z + 0.5).toFixed(2))))
               }
               aria-label="Zoom in"
             >
@@ -1267,17 +1264,16 @@ export function AssignSplitView({
             </button>
           </div>
 
-          <div className="receipt-viewer-stage">
-            <img
-              src={receiptImageUrl}
-              alt="Cropped and redacted receipt"
-              className="receipt-viewer-img"
-              style={{
-                width: `${receiptZoom * 100}%`,
-                maxWidth: receiptZoom === 1 ? '640px' : 'none',
-              }}
-            />
-          </div>
+          <ZoomableReceiptImage
+            src={receiptImageUrl}
+            alt="Cropped and redacted receipt"
+            scale={receiptZoom}
+            minScale={1}
+            maxScale={4}
+            onScaleChange={setReceiptZoom}
+            className="receipt-fullscreen-viewport"
+            showHint
+          />
         </div>
       )}
     </div>
