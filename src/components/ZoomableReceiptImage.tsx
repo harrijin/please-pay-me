@@ -44,18 +44,10 @@ export function ZoomableReceiptImage({
 }: ZoomableReceiptImageProps) {
   const viewportRef = useRef<HTMLDivElement>(null)
   const imgRef = useRef<HTMLImageElement>(null)
-
-  const [tx, setTx] = useState(0)
-  const [ty, setTy] = useState(0)
   const [hasInteracted, setHasInteracted] = useState(false)
-  const [isAnimating, setIsAnimating] = useState(false)
 
-  // Keep latest transform in refs for zero-lag gesture math
+  // Mutable transform state applied directly to DOM for 60/120fps pinch-zoom without React re-renders
   const transformRef = useRef({ scale, tx: 0, ty: 0 })
-  transformRef.current.scale = scale
-  transformRef.current.tx = tx
-  transformRef.current.ty = ty
-
   const pointersRef = useRef<Map<number, Point>>(new Map())
   const pinchStartRef = useRef<{
     dist: number
@@ -74,7 +66,7 @@ export function ZoomableReceiptImage({
   const lastTapRef = useRef<{ time: number; x: number; y: number } | null>(null)
 
   const clampTranslation = useCallback(
-    (nextTx: number, nextTy: number, targetScale: number): { x: number; y: number } => {
+    (nextTx: number, nextTy: number, targetScale: number): Point => {
       const vp = viewportRef.current
       const img = imgRef.current
       if (!vp || !img) return { x: nextTx, y: nextTy }
@@ -87,64 +79,73 @@ export function ZoomableReceiptImage({
       const scaledH = baseH * targetScale
 
       const clampedX =
-        scaledW <= vpW
-          ? (vpW - scaledW) / 2
-          : clamp(nextTx, vpW - scaledW, 0)
+        scaledW <= vpW ? (vpW - scaledW) / 2 : clamp(nextTx, vpW - scaledW, 0)
       const clampedY =
-        scaledH <= vpH
-          ? (vpH - scaledH) / 2
-          : clamp(nextTy, vpH - scaledH, 0)
+        scaledH <= vpH ? (vpH - scaledH) / 2 : clamp(nextTy, vpH - scaledH, 0)
 
       return { x: clampedX, y: clampedY }
     },
     []
   )
 
+  const commitDomTransform = useCallback((animate: boolean) => {
+    const img = imgRef.current
+    if (!img) return
+    const { tx, ty, scale: s } = transformRef.current
+    img.classList.toggle('animating', animate)
+    img.style.transform = `translate3d(${tx}px, ${ty}px, 0) scale(${s})`
+  }, [])
+
   const applyTransform = useCallback(
-    (nextScale: number, nextTx: number, nextTy: number, animate = false) => {
+    (
+      nextScale: number,
+      nextTx: number,
+      nextTy: number,
+      animate = false,
+      notifyParent = true
+    ) => {
       const clampedScale = clamp(nextScale, minScale, maxScale)
       const clamped = clampTranslation(nextTx, nextTy, clampedScale)
-      setIsAnimating(animate)
-      setTx(clamped.x)
-      setTy(clamped.y)
-      if (Math.abs(clampedScale - transformRef.current.scale) > 0.001) {
+      const prevScale = transformRef.current.scale
+      transformRef.current = {
+        scale: clampedScale,
+        tx: clamped.x,
+        ty: clamped.y,
+      }
+      commitDomTransform(animate)
+      if (notifyParent && Math.abs(clampedScale - prevScale) > 0.001) {
         onScaleChange(clampedScale)
       }
     },
-    [clampTranslation, maxScale, minScale, onScaleChange]
+    [clampTranslation, commitDomTransform, maxScale, minScale, onScaleChange]
   )
 
-  // When external +/-/reset buttons change `scale`, zoom smoothly around viewport center
-  const prevScalePropRef = useRef(scale)
+  // Sync external +/-/reset button changes from parent into the GPU transform
   useEffect(() => {
-    const prev = prevScalePropRef.current
-    if (Math.abs(scale - prev) > 0.001) {
-      prevScalePropRef.current = scale
-      const vp = viewportRef.current
-      if (vp) {
-        const cx = vp.clientWidth / 2
-        const cy = vp.clientHeight / 2
-        const cur = transformRef.current
-        if (scale <= minScale + 0.001) {
-          const reset = clampTranslation(0, 0, scale)
-          setIsAnimating(true)
-          setTx(reset.x)
-          setTy(reset.y)
-        } else {
-          const imgX = (cx - cur.tx) / prev
-          const imgY = (cy - cur.ty) / prev
-          const nextTx = cx - imgX * scale
-          const nextTy = cy - imgY * scale
-          const clamped = clampTranslation(nextTx, nextTy, scale)
-          setIsAnimating(true)
-          setTx(clamped.x)
-          setTy(clamped.y)
-        }
-      }
-    }
-  }, [scale, minScale, clampTranslation])
+    const cur = transformRef.current
+    if (Math.abs(scale - cur.scale) <= 0.001) return
 
-  // Prevent Safari/Chrome wheel-pinch from zooming the page when cursor is over the PiP viewport
+    const vp = viewportRef.current
+    if (!vp) {
+      transformRef.current.scale = scale
+      commitDomTransform(true)
+      return
+    }
+
+    if (scale <= minScale + 0.001) {
+      applyTransform(scale, 0, 0, true, false)
+    } else {
+      const cx = vp.clientWidth / 2
+      const cy = vp.clientHeight / 2
+      const imgX = (cx - cur.tx) / cur.scale
+      const imgY = (cy - cur.ty) / cur.scale
+      const nextTx = cx - imgX * scale
+      const nextTy = cy - imgY * scale
+      applyTransform(scale, nextTx, nextTy, true, false)
+    }
+  }, [scale, minScale, applyTransform, commitDomTransform])
+
+  // Prevent trackpad/wheel pinch from zooming the browser page when cursor is over the viewport
   useEffect(() => {
     const vp = viewportRef.current
     if (!vp) return
@@ -160,10 +161,7 @@ export function ZoomableReceiptImage({
       const nextScale = clamp(cur.scale * zoomFactor, minScale, maxScale)
       const imgX = (mx - cur.tx) / cur.scale
       const imgY = (my - cur.ty) / cur.scale
-      const nextTx = mx - imgX * nextScale
-      const nextTy = my - imgY * nextScale
-      prevScalePropRef.current = nextScale
-      applyTransform(nextScale, nextTx, nextTy, false)
+      applyTransform(nextScale, mx - imgX * nextScale, my - imgY * nextScale, false)
     }
     vp.addEventListener('wheel', handleWheel, { passive: false })
     return () => vp.removeEventListener('wheel', handleWheel)
@@ -181,7 +179,6 @@ export function ZoomableReceiptImage({
   const handlePointerDown = (e: React.PointerEvent) => {
     e.preventDefault()
     ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
-    setIsAnimating(false)
 
     const pt = getLocalPoint(e)
     pointersRef.current.set(e.pointerId, pt)
@@ -203,7 +200,6 @@ export function ZoomableReceiptImage({
     }
 
     if (pts.length === 1) {
-      // Detect double-tap to zoom in/out anchored to tap location
       const now = Date.now()
       const last = lastTapRef.current
       if (
@@ -216,15 +212,11 @@ export function ZoomableReceiptImage({
         const cur = transformRef.current
         const nextScale = cur.scale > 1.25 ? minScale : 2.2
         if (nextScale <= minScale + 0.001) {
-          prevScalePropRef.current = nextScale
           applyTransform(nextScale, 0, 0, true)
         } else {
           const imgX = (pt.x - cur.tx) / cur.scale
           const imgY = (pt.y - cur.ty) / cur.scale
-          const nextTx = pt.x - imgX * nextScale
-          const nextTy = pt.y - imgY * nextScale
-          prevScalePropRef.current = nextScale
-          applyTransform(nextScale, nextTx, nextTy, true)
+          applyTransform(nextScale, pt.x - imgX * nextScale, pt.y - imgY * nextScale, true)
         }
         return
       }
@@ -258,13 +250,11 @@ export function ZoomableReceiptImage({
         maxScale
       )
 
-      // Keep the exact receipt point under the initial pinch midpoint glued to current midpoint
       const imgX = (start.mid.x - start.tx) / start.scale
       const imgY = (start.mid.y - start.ty) / start.scale
       const nextTx = curMid.x - imgX * nextScale
       const nextTy = curMid.y - imgY * nextScale
 
-      prevScalePropRef.current = nextScale
       applyTransform(nextScale, nextTx, nextTy, false)
       return
     }
@@ -277,13 +267,13 @@ export function ZoomableReceiptImage({
         setHasInteracted(true)
         lastTapRef.current = null
       }
-      const clamped = clampTranslation(
+      applyTransform(
+        transformRef.current.scale,
         pan.tx + dx,
         pan.ty + dy,
-        transformRef.current.scale
+        false,
+        false
       )
-      setTx(clamped.x)
-      setTy(clamped.y)
     }
   }
 
@@ -295,7 +285,6 @@ export function ZoomableReceiptImage({
       pinchStartRef.current = null
     }
 
-    // Smooth handoff from 2-finger pinch back to 1-finger pan without jumping
     if (remaining.length === 1) {
       const [id, pt] = remaining[0]
       panStartRef.current = {
@@ -311,9 +300,7 @@ export function ZoomableReceiptImage({
   }
 
   const handleImageLoad = () => {
-    const clamped = clampTranslation(0, 0, transformRef.current.scale)
-    setTx(clamped.x)
-    setTy(clamped.y)
+    applyTransform(transformRef.current.scale, 0, 0, false, false)
   }
 
   return (
@@ -331,10 +318,7 @@ export function ZoomableReceiptImage({
         alt={alt}
         draggable={false}
         onLoad={handleImageLoad}
-        className={`zoomable-img ${isAnimating ? 'animating' : ''}`}
-        style={{
-          transform: `translate3d(${tx}px, ${ty}px, 0) scale(${scale})`,
-        }}
+        className="zoomable-img"
       />
       {showHint && !hasInteracted && (
         <div className="zoomable-hint" aria-hidden="true">
