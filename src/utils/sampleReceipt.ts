@@ -138,6 +138,9 @@ export function createReceiptFromScan(
         name: sf.name,
         color: pickPersonColor(i + 1),
         ...(sf.venmo ? { venmo: sf.venmo } : {}),
+        ...(sf.cashApp ? { cashApp: sf.cashApp } : {}),
+        ...(sf.paypal ? { paypal: sf.paypal } : {}),
+        ...(sf.zelle ? { zelle: sf.zelle } : {}),
       })
     })
   } else {

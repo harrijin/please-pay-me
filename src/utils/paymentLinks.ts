@@ -131,10 +131,22 @@ export function isPersonSelf(
   if (!person) return true
   if (typeof person.isSelf === 'boolean') return person.isSelf
 
-  const personVenmo = cleanVenmoHandle(person.venmo)
+  const pVenmo = cleanVenmoHandle(person.venmo)
+  const pCash = cleanCashAppHandle(person.cashApp)
+  const pPayPal = cleanPayPalHandle(person.paypal)
+  const pZelle = cleanZelleHandle(person.zelle)
   const myVenmo = cleanVenmoHandle(settings.handles.venmo)
-  // If the person has a distinct Venmo handle explicitly set, they are a friend.
-  if (personVenmo && (!myVenmo || personVenmo.toLowerCase() !== myVenmo.toLowerCase())) {
+  const myCash = cleanCashAppHandle(settings.handles.cashApp)
+  const myPayPal = cleanPayPalHandle(settings.handles.paypal)
+  const myZelle = cleanZelleHandle(settings.handles.zelle)
+
+  // If the person has any distinct handle explicitly set, they are a friend.
+  if (
+    (pVenmo && (!myVenmo || pVenmo.toLowerCase() !== myVenmo.toLowerCase())) ||
+    (pCash && (!myCash || pCash.toLowerCase() !== myCash.toLowerCase())) ||
+    (pPayPal && (!myPayPal || pPayPal.toLowerCase() !== myPayPal.toLowerCase())) ||
+    (pZelle && (!myZelle || pZelle.toLowerCase() !== myZelle.toLowerCase()))
+  ) {
     return false
   }
 
@@ -142,14 +154,16 @@ export function isPersonSelf(
   const myNameLower = (settings.userName.trim() || 'me').toLowerCase()
   if (nameLower === myNameLower || nameLower === 'me') return true
 
-  // Fallback: first person in a receipt with no custom Venmo handle
-  return receipt.people[0]?.id === person.id && !personVenmo
+  // Fallback: first person in a receipt with no custom handles
+  return (
+    receipt.people[0]?.id === person.id && !pVenmo && !pCash && !pPayPal && !pZelle
+  )
 }
 
 /**
  * Returns the payment handles for whoever actually paid the bill.
  * - If you paid: uses your Settings handles (with any override on your person chip).
- * - If a friend paid: uses ONLY that friend's handle(s), never substituting yours.
+ * - If a friend paid: uses ONLY that friend's handles, never substituting yours.
  */
 export function resolvePayerHandles(
   payer: Person | undefined,
@@ -158,15 +172,18 @@ export function resolvePayerHandles(
 ): { handles: PaymentHandles; isPayerSelf: boolean } {
   const selfPayer = isPersonSelf(payer, receipt, settings)
   const payerVenmo = cleanVenmoHandle(payer?.venmo)
+  const payerCashApp = cleanCashAppHandle(payer?.cashApp)
+  const payerPayPal = cleanPayPalHandle(payer?.paypal)
+  const payerZelle = cleanZelleHandle(payer?.zelle)
 
   if (selfPayer) {
     return {
       isPayerSelf: true,
       handles: {
         venmo: payerVenmo || cleanVenmoHandle(settings.handles.venmo),
-        cashApp: cleanCashAppHandle(settings.handles.cashApp),
-        paypal: cleanPayPalHandle(settings.handles.paypal),
-        zelle: cleanZelleHandle(settings.handles.zelle),
+        cashApp: payerCashApp || cleanCashAppHandle(settings.handles.cashApp),
+        paypal: payerPayPal || cleanPayPalHandle(settings.handles.paypal),
+        zelle: payerZelle || cleanZelleHandle(settings.handles.zelle),
       },
     }
   }
@@ -175,9 +192,9 @@ export function resolvePayerHandles(
     isPayerSelf: false,
     handles: {
       venmo: payerVenmo,
-      cashApp: '',
-      paypal: '',
-      zelle: '',
+      cashApp: payerCashApp,
+      paypal: payerPayPal,
+      zelle: payerZelle,
     },
   }
 }

@@ -24,12 +24,15 @@ import type {
 } from '../types/receipt'
 import { formatCents, getInitials } from '../utils/format'
 import {
+  buildCashAppPayUrl,
   buildPaymentNote,
+  buildPayPalPayUrl,
   buildVenmoChargeUrl,
   buildVenmoPayUrl,
   cleanCashAppHandle,
   cleanPayPalHandle,
   cleanVenmoHandle,
+  cleanZelleHandle,
   hasAnyPaymentHandle,
   resolveDestinationUrl,
   resolvePayerHandles,
@@ -64,6 +67,7 @@ export function CollectView({
   const [expandedPersonId, setExpandedPersonId] = useState<string | null>(null)
   const [qrFriendIndex, setQrFriendIndex] = useState<number | null>(null)
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [editingPayerHandles, setEditingPayerHandles] = useState(false)
 
   const payer =
     receipt.people.find((p) => p.id === receipt.payerId) ?? receipt.people[0]
@@ -110,10 +114,12 @@ export function CollectView({
       b.totalCents,
       note
     )
-    const venmoPayPayerUrl = payerHandles.venmo
-      ? buildVenmoPayUrl(payerHandles.venmo, b.totalCents, note)
-      : null
-    return { payload, breakdownUrl, resolved, venmoChargeUrl, venmoPayPayerUrl }
+    const directPayPayerUrl =
+      (payerHandles.venmo && buildVenmoPayUrl(payerHandles.venmo, b.totalCents, note)) ||
+      (payerHandles.cashApp && buildCashAppPayUrl(payerHandles.cashApp, b.totalCents)) ||
+      (payerHandles.paypal && buildPayPalPayUrl(payerHandles.paypal, b.totalCents)) ||
+      null
+    return { payload, breakdownUrl, resolved, venmoChargeUrl, directPayPayerUrl }
   }
 
   const handleCopy = async (url: string, personId: string, label: string) => {
@@ -163,20 +169,16 @@ export function CollectView({
       label: 'Direct: Venmo',
       configured: Boolean(cleanVenmoHandle(payerHandles.venmo)),
     },
-    ...(isPayerSelf
-      ? [
-          {
-            id: 'cashapp' as const,
-            label: 'Direct: Cash App',
-            configured: Boolean(cleanCashAppHandle(payerHandles.cashApp)),
-          },
-          {
-            id: 'paypal' as const,
-            label: 'Direct: PayPal',
-            configured: Boolean(cleanPayPalHandle(payerHandles.paypal)),
-          },
-        ]
-      : []),
+    {
+      id: 'cashapp',
+      label: 'Direct: Cash App',
+      configured: Boolean(cleanCashAppHandle(payerHandles.cashApp)),
+    },
+    {
+      id: 'paypal',
+      label: 'Direct: PayPal',
+      configured: Boolean(cleanPayPalHandle(payerHandles.paypal)),
+    },
   ]
 
   const qrItems = useMemo(
@@ -299,21 +301,116 @@ export function CollectView({
               border: '1px solid var(--border-strong)',
             }}
           >
-            <label htmlFor="payer-venmo-inline" className="field-label">
-              {payerName}&apos;s Venmo @handle (payments go to {payerName}, not you)
-            </label>
-            <input
-              id="payer-venmo-inline"
-              type="text"
-              className="input input-compact mono"
-              placeholder={`Enter ${payerName}'s Venmo username`}
-              value={payer.venmo ?? ''}
-              onChange={(e) =>
-                onUpdatePerson(payer.id, {
-                  venmo: cleanVenmoHandle(e.target.value),
-                })
-              }
-            />
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 8,
+                marginBottom: !hasHandles || editingPayerHandles ? 10 : 0,
+              }}
+            >
+              <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--ink-primary)' }}>
+                {payerName}&apos;s Payment Handles
+                <span style={{ fontWeight: 500, color: 'var(--ink-muted)', marginLeft: 6 }}>
+                  (payments go to {payerName})
+                </span>
+              </span>
+              {hasHandles && (
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-xs"
+                  onClick={() => setEditingPayerHandles((v) => !v)}
+                >
+                  {editingPayerHandles ? 'Done' : 'Edit'}
+                </button>
+              )}
+            </div>
+
+            {(!hasHandles || editingPayerHandles) && (
+              <div className="handles-grid">
+                <div>
+                  <label htmlFor="payer-venmo-inline" className="field-label">
+                    Venmo
+                  </label>
+                  <input
+                    id="payer-venmo-inline"
+                    type="text"
+                    className="input input-compact mono"
+                    placeholder="@username"
+                    value={payer.venmo ?? ''}
+                    onChange={(e) =>
+                      onUpdatePerson(payer.id, { venmo: e.target.value })
+                    }
+                    onBlur={(e) =>
+                      onUpdatePerson(payer.id, {
+                        venmo: cleanVenmoHandle(e.target.value),
+                      })
+                    }
+                  />
+                </div>
+                <div>
+                  <label htmlFor="payer-cashapp-inline" className="field-label">
+                    Cash App
+                  </label>
+                  <input
+                    id="payer-cashapp-inline"
+                    type="text"
+                    className="input input-compact mono"
+                    placeholder="$cashtag"
+                    value={payer.cashApp ?? ''}
+                    onChange={(e) =>
+                      onUpdatePerson(payer.id, { cashApp: e.target.value })
+                    }
+                    onBlur={(e) =>
+                      onUpdatePerson(payer.id, {
+                        cashApp: cleanCashAppHandle(e.target.value),
+                      })
+                    }
+                  />
+                </div>
+                <div>
+                  <label htmlFor="payer-paypal-inline" className="field-label">
+                    PayPal.Me
+                  </label>
+                  <input
+                    id="payer-paypal-inline"
+                    type="text"
+                    className="input input-compact mono"
+                    placeholder="username"
+                    value={payer.paypal ?? ''}
+                    onChange={(e) =>
+                      onUpdatePerson(payer.id, { paypal: e.target.value })
+                    }
+                    onBlur={(e) =>
+                      onUpdatePerson(payer.id, {
+                        paypal: cleanPayPalHandle(e.target.value),
+                      })
+                    }
+                  />
+                </div>
+                <div>
+                  <label htmlFor="payer-zelle-inline" className="field-label">
+                    Zelle
+                  </label>
+                  <input
+                    id="payer-zelle-inline"
+                    type="text"
+                    className="input input-compact mono"
+                    placeholder="email or phone"
+                    value={payer.zelle ?? ''}
+                    onChange={(e) =>
+                      onUpdatePerson(payer.id, { zelle: e.target.value })
+                    }
+                    onBlur={(e) =>
+                      onUpdatePerson(payer.id, {
+                        zelle: cleanZelleHandle(e.target.value),
+                      })
+                    }
+                  />
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -331,7 +428,7 @@ export function CollectView({
                   onNotify(
                     isPayerSelf
                       ? `Add your ${opt.label.replace('Direct: ', '')} handle in Settings`
-                      : `Enter ${payerName}'s Venmo handle above first`
+                      : `Add ${payerName}'s ${opt.label.replace('Direct: ', '')} handle above first`
                   )
                 }
               }}
@@ -344,9 +441,7 @@ export function CollectView({
 
         <p className="field-hint" style={{ marginBottom: 0 }}>
           {destination === 'breakdown'
-            ? `Opens a zero-database itemized receipt ticket (#s=…) paying ${payerName}${
-                payerHandles.venmo ? ` (@${payerHandles.venmo})` : ''
-              }.`
+            ? `Opens a zero-database itemized receipt ticket (#s=…) paying ${payerName}.`
             : `Scans or shares directly into the selected payment app to pay ${payerName}.`}
         </p>
       </section>
@@ -367,7 +462,7 @@ export function CollectView({
         </section>
       ) : (
         friendBreakdowns.map((b, idx) => {
-          const { payload, resolved, venmoChargeUrl, venmoPayPayerUrl } =
+          const { payload, resolved, venmoChargeUrl, directPayPayerUrl } =
             getFriendLinks(b)
           const isExpanded = expandedPersonId === b.person.id
           const isPaid = Boolean(b.person.paid)
@@ -519,9 +614,9 @@ export function CollectView({
                     <span>Charge Venmo</span>
                     <ExternalLink size={12} style={{ opacity: 0.65 }} />
                   </a>
-                ) : venmoPayPayerUrl ? (
+                ) : directPayPayerUrl ? (
                   <a
-                    href={venmoPayPayerUrl}
+                    href={directPayPayerUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="btn btn-secondary btn-sm"
@@ -534,12 +629,10 @@ export function CollectView({
                   <button
                     type="button"
                     className="btn btn-secondary btn-sm"
-                    onClick={() =>
-                      onNotify(`Enter ${payerName}'s Venmo handle above to pay on Venmo`)
-                    }
+                    onClick={() => onPreviewBreakdown(payload, false)}
                   >
                     <Send size={15} />
-                    <span>Pay Venmo</span>
+                    <span>Pay {payerName}</span>
                   </button>
                 )}
               </div>

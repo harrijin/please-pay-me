@@ -175,7 +175,15 @@ describe('paymentLinks', () => {
       date: '2026-11-26',
       people: [
         { id: 'me', name: 'Harrison', color: '#0f766e', isSelf: true },
-        { id: 'friend', name: 'Alex', color: '#c2410c', venmo: '@alex-friend' },
+        {
+          id: 'friend',
+          name: 'Alex',
+          color: '#c2410c',
+          venmo: '@alex-friend',
+          cashApp: '$alexcash',
+          paypal: 'alexpp',
+          zelle: 'alex@example.com',
+        },
       ],
       payerId: 'friend',
       items: [],
@@ -192,9 +200,9 @@ describe('paymentLinks', () => {
     expect(friendResult.isPayerSelf).toBe(false)
     expect(friendResult.handles).toEqual({
       venmo: 'alex-friend',
-      cashApp: '',
-      paypal: '',
-      zelle: '',
+      cashApp: 'alexcash',
+      paypal: 'alexpp',
+      zelle: 'alex@example.com',
     })
 
     const selfResult = resolvePayerHandles(receipt.people[0], receipt, settings)

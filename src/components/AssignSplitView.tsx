@@ -23,6 +23,7 @@ import type {
   Person,
   ReceiptItem,
   ReceiptSplit,
+  SavedFriend,
   SplitSummary,
   TaxTipMode,
 } from '../types/receipt'
@@ -34,7 +35,12 @@ import {
   getInitials,
   pickPersonColor,
 } from '../utils/format'
-import { cleanVenmoHandle } from '../utils/paymentLinks'
+import {
+  cleanCashAppHandle,
+  cleanPayPalHandle,
+  cleanVenmoHandle,
+  cleanZelleHandle,
+} from '../utils/paymentLinks'
 import { allocateCents, splitItemIntoCount } from '../utils/splitMath'
 
 interface AssignSplitViewProps {
@@ -43,7 +49,10 @@ interface AssignSplitViewProps {
   settings: AppSettings
   receiptImageUrl: string | null
   onChange: (next: ReceiptSplit) => void
-  onSaveFriendToSettings: (name: string, venmo?: string) => void
+  onSaveFriendToSettings: (
+    name: string,
+    handles?: { venmo?: string; cashApp?: string; paypal?: string; zelle?: string }
+  ) => void
   onGoCollect: () => void
   onNotify: (msg: string) => void
 }
@@ -107,6 +116,10 @@ export function AssignSplitView({
 }: AssignSplitViewProps) {
   const [newPersonName, setNewPersonName] = useState('')
   const [newPersonVenmo, setNewPersonVenmo] = useState('')
+  const [newPersonCashApp, setNewPersonCashApp] = useState('')
+  const [newPersonPayPal, setNewPersonPayPal] = useState('')
+  const [newPersonZelle, setNewPersonZelle] = useState('')
+  const [showMoreHandles, setShowMoreHandles] = useState(false)
   const [editingPersonId, setEditingPersonId] = useState<string | null>(null)
   const [expandedWeightsItemId, setExpandedWeightsItemId] = useState<string | null>(null)
   const [receiptViewerOpen, setReceiptViewerOpen] = useState(false)
@@ -123,36 +136,52 @@ export function AssignSplitView({
     if (!name) return
 
     const venmo = cleanVenmoHandle(newPersonVenmo)
+    const cashApp = cleanCashAppHandle(newPersonCashApp)
+    const paypal = cleanPayPalHandle(newPersonPayPal)
+    const zelle = cleanZelleHandle(newPersonZelle)
+
     const person: Person = {
       id: generateId('p'),
       name,
       color: pickPersonColor(receipt.people.length),
       ...(venmo ? { venmo } : {}),
+      ...(cashApp ? { cashApp } : {}),
+      ...(paypal ? { paypal } : {}),
+      ...(zelle ? { zelle } : {}),
     }
 
     updateReceipt({ people: [...receipt.people, person] })
     setNewPersonName('')
     setNewPersonVenmo('')
+    setNewPersonCashApp('')
+    setNewPersonPayPal('')
+    setNewPersonZelle('')
+    setShowMoreHandles(false)
 
-    // Save to quick-add directory automatically if not already saved
-    const alreadySaved = settings.savedFriends.some(
-      (sf) => sf.name.toLowerCase() === name.toLowerCase()
-    )
-    if (!alreadySaved && name.toLowerCase() !== (settings.userName || 'me').toLowerCase()) {
-      onSaveFriendToSettings(name, venmo || undefined)
+    // Save/update in quick-add friends directory
+    if (name.toLowerCase() !== (settings.userName || 'me').toLowerCase()) {
+      onSaveFriendToSettings(name, {
+        venmo: venmo || undefined,
+        cashApp: cashApp || undefined,
+        paypal: paypal || undefined,
+        zelle: zelle || undefined,
+      })
     }
   }
 
-  const handleQuickAddSavedFriend = (name: string, venmo?: string) => {
-    if (receipt.people.some((p) => p.name.toLowerCase() === name.toLowerCase())) {
-      onNotify(`${name} is already on this bill`)
+  const handleQuickAddSavedFriend = (sf: SavedFriend) => {
+    if (receipt.people.some((p) => p.name.toLowerCase() === sf.name.toLowerCase())) {
+      onNotify(`${sf.name} is already on this bill`)
       return
     }
     const person: Person = {
       id: generateId('p'),
-      name,
+      name: sf.name,
       color: pickPersonColor(receipt.people.length),
-      ...(venmo ? { venmo } : {}),
+      ...(sf.venmo ? { venmo: sf.venmo } : {}),
+      ...(sf.cashApp ? { cashApp: sf.cashApp } : {}),
+      ...(sf.paypal ? { paypal: sf.paypal } : {}),
+      ...(sf.zelle ? { zelle: sf.zelle } : {}),
     }
     updateReceipt({ people: [...receipt.people, person] })
   }
@@ -319,34 +348,69 @@ export function AssignSplitView({
         </div>
       </div>
 
-      {/* Pinned Receipt Reference Bar (optional split-screen while editing items) */}
+      {/* Pinned Receipt Reference Bar (zoomable split-screen while editing items) */}
       {receiptImageUrl && receiptPinned && (
         <section className="receipt-pin-bar" aria-label="Pinned receipt photo">
           <div className="receipt-pin-head">
             <span className="receipt-pin-title">
               <ImageIcon size={14} />
-              <span>Receipt Reference (scroll to inspect)</span>
+              <span>Receipt</span>
             </span>
-            <div style={{ display: 'flex', gap: 6 }}>
+            <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                id="pin-zoom-out-btn"
+                className="btn btn-secondary btn-xs"
+                style={{ padding: '4px 7px' }}
+                disabled={receiptZoom <= 1}
+                onClick={() =>
+                  setReceiptZoom((z) => Math.max(1, Number((z - 0.5).toFixed(2))))
+                }
+                aria-label="Zoom out pinned receipt"
+              >
+                <ZoomOut size={13} />
+              </button>
+              <button
+                type="button"
+                id="pin-zoom-reset-btn"
+                className="btn btn-secondary btn-xs mono"
+                style={{ padding: '4px 7px' }}
+                onClick={() => setReceiptZoom(1)}
+                title="Reset zoom to 100%"
+              >
+                {Math.round(receiptZoom * 100)}%
+              </button>
+              <button
+                type="button"
+                id="pin-zoom-in-btn"
+                className="btn btn-secondary btn-xs"
+                style={{ padding: '4px 7px' }}
+                disabled={receiptZoom >= 3}
+                onClick={() =>
+                  setReceiptZoom((z) => Math.min(3, Number((z + 0.5).toFixed(2))))
+                }
+                aria-label="Zoom in pinned receipt"
+              >
+                <ZoomIn size={13} />
+              </button>
               <button
                 type="button"
                 className="btn btn-secondary btn-xs"
-                onClick={() => {
-                  setReceiptZoom(1)
-                  setReceiptViewerOpen(true)
-                }}
+                style={{ padding: '4px 8px' }}
+                onClick={() => setReceiptViewerOpen(true)}
+                aria-label="Expand receipt full screen"
+                title="Expand full screen"
               >
                 <Maximize2 size={13} />
-                <span>Zoom</span>
               </button>
               <button
                 type="button"
                 className="btn btn-ghost btn-xs"
+                style={{ padding: '4px 7px' }}
                 onClick={() => setReceiptPinned(false)}
                 aria-label="Hide pinned receipt"
               >
                 <X size={14} />
-                <span>Hide</span>
               </button>
             </div>
           </div>
@@ -355,6 +419,13 @@ export function AssignSplitView({
               src={receiptImageUrl}
               alt="Cropped receipt reference"
               className="receipt-pin-img"
+              style={{
+                width: `${receiptZoom * 100}%`,
+                maxWidth: 'none',
+              }}
+              onDoubleClick={() =>
+                setReceiptZoom((z) => (z > 1 ? 1 : 2))
+              }
             />
           </div>
         </section>
@@ -478,13 +549,34 @@ export function AssignSplitView({
               borderRadius: 'var(--radius-md)',
               background: 'var(--surface-subtle)',
               border: '1px solid var(--border-strong)',
-              display: 'grid',
-              gridTemplateColumns: '1fr 1fr',
-              gap: 8,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 10,
             }}
           >
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 8,
+              }}
+            >
+              <span style={{ fontSize: '0.8rem', fontWeight: 750 }}>
+                Edit {editingPerson.name}&apos;s Info &amp; Handles
+              </span>
+              <button
+                type="button"
+                className="btn btn-ghost btn-xs"
+                onClick={() => setEditingPersonId(null)}
+              >
+                <X size={13} />
+                <span>Done</span>
+              </button>
+            </div>
+
             <div>
-              <label className="field-label">Edit Name</label>
+              <label className="field-label">Name</label>
               <input
                 type="text"
                 className="input input-compact"
@@ -494,49 +586,161 @@ export function AssignSplitView({
                 }
               />
             </div>
-            <div>
-              <label className="field-label">Friend Venmo (optional)</label>
-              <input
-                type="text"
-                className="input input-compact mono"
-                placeholder="@username"
-                value={editingPerson.venmo ?? ''}
-                onChange={(e) =>
-                  handleUpdatePerson(editingPerson.id, {
-                    venmo: cleanVenmoHandle(e.target.value),
-                  })
-                }
-              />
+
+            <div className="handles-grid">
+              <div>
+                <label className="field-label">Venmo</label>
+                <input
+                  type="text"
+                  className="input input-compact mono"
+                  placeholder="@username"
+                  value={editingPerson.venmo ?? ''}
+                  onChange={(e) =>
+                    handleUpdatePerson(editingPerson.id, { venmo: e.target.value })
+                  }
+                  onBlur={(e) => {
+                    const clean = cleanVenmoHandle(e.target.value)
+                    handleUpdatePerson(editingPerson.id, { venmo: clean })
+                    if (!editingPerson.isSelf && clean) {
+                      onSaveFriendToSettings(editingPerson.name, { venmo: clean })
+                    }
+                  }}
+                />
+              </div>
+
+              <div>
+                <label className="field-label">Cash App</label>
+                <input
+                  type="text"
+                  className="input input-compact mono"
+                  placeholder="$cashtag"
+                  value={editingPerson.cashApp ?? ''}
+                  onChange={(e) =>
+                    handleUpdatePerson(editingPerson.id, { cashApp: e.target.value })
+                  }
+                  onBlur={(e) => {
+                    const clean = cleanCashAppHandle(e.target.value)
+                    handleUpdatePerson(editingPerson.id, { cashApp: clean })
+                    if (!editingPerson.isSelf && clean) {
+                      onSaveFriendToSettings(editingPerson.name, { cashApp: clean })
+                    }
+                  }}
+                />
+              </div>
+
+              <div>
+                <label className="field-label">PayPal.Me</label>
+                <input
+                  type="text"
+                  className="input input-compact mono"
+                  placeholder="username"
+                  value={editingPerson.paypal ?? ''}
+                  onChange={(e) =>
+                    handleUpdatePerson(editingPerson.id, { paypal: e.target.value })
+                  }
+                  onBlur={(e) => {
+                    const clean = cleanPayPalHandle(e.target.value)
+                    handleUpdatePerson(editingPerson.id, { paypal: clean })
+                    if (!editingPerson.isSelf && clean) {
+                      onSaveFriendToSettings(editingPerson.name, { paypal: clean })
+                    }
+                  }}
+                />
+              </div>
+
+              <div>
+                <label className="field-label">Zelle</label>
+                <input
+                  type="text"
+                  className="input input-compact mono"
+                  placeholder="email or phone"
+                  value={editingPerson.zelle ?? ''}
+                  onChange={(e) =>
+                    handleUpdatePerson(editingPerson.id, { zelle: e.target.value })
+                  }
+                  onBlur={(e) => {
+                    const clean = cleanZelleHandle(e.target.value)
+                    handleUpdatePerson(editingPerson.id, { zelle: clean })
+                    if (!editingPerson.isSelf && clean) {
+                      onSaveFriendToSettings(editingPerson.name, { zelle: clean })
+                    }
+                  }}
+                />
+              </div>
             </div>
           </div>
         )}
 
-        <form className="add-person-form" onSubmit={handleAddPerson}>
-          <input
-            id="add-person-name"
-            type="text"
-            className="input input-compact"
-            placeholder="Add person (e.g., Alex)"
-            value={newPersonName}
-            onChange={(e) => setNewPersonName(e.target.value)}
-          />
-          <input
-            id="add-person-venmo"
-            type="text"
-            className="input input-compact mono"
-            placeholder="Venmo @handle (opt.)"
-            value={newPersonVenmo}
-            onChange={(e) => setNewPersonVenmo(e.target.value)}
-          />
-          <button
-            type="submit"
-            id="add-person-btn"
-            className="btn btn-secondary btn-sm"
-            disabled={!newPersonName.trim()}
-          >
-            <UserPlus size={15} />
-            <span>Add</span>
-          </button>
+        <form onSubmit={handleAddPerson} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div className="add-person-form">
+            <input
+              id="add-person-name"
+              type="text"
+              className="input input-compact"
+              placeholder="Add person (e.g., Alex)"
+              value={newPersonName}
+              onChange={(e) => setNewPersonName(e.target.value)}
+            />
+            <input
+              id="add-person-venmo"
+              type="text"
+              className="input input-compact mono"
+              placeholder="Venmo @handle (opt.)"
+              value={newPersonVenmo}
+              onChange={(e) => setNewPersonVenmo(e.target.value)}
+            />
+            <button
+              type="submit"
+              id="add-person-btn"
+              className="btn btn-secondary btn-sm"
+              disabled={!newPersonName.trim()}
+            >
+              <UserPlus size={15} />
+              <span>Add</span>
+            </button>
+          </div>
+
+          <div>
+            <button
+              type="button"
+              className="btn btn-ghost btn-xs"
+              style={{ padding: '2px 6px' }}
+              onClick={() => setShowMoreHandles((s) => !s)}
+            >
+              <Plus size={12} />
+              <span>
+                {showMoreHandles
+                  ? 'Hide Cash App / PayPal / Zelle'
+                  : 'Add Cash App / PayPal / Zelle'}
+              </span>
+            </button>
+          </div>
+
+          {showMoreHandles && (
+            <div className="handles-grid">
+              <input
+                type="text"
+                className="input input-compact mono"
+                placeholder="Cash App $cashtag (opt.)"
+                value={newPersonCashApp}
+                onChange={(e) => setNewPersonCashApp(e.target.value)}
+              />
+              <input
+                type="text"
+                className="input input-compact mono"
+                placeholder="PayPal.Me username (opt.)"
+                value={newPersonPayPal}
+                onChange={(e) => setNewPersonPayPal(e.target.value)}
+              />
+              <input
+                type="text"
+                className="input input-compact mono"
+                placeholder="Zelle email or phone (opt.)"
+                value={newPersonZelle}
+                onChange={(e) => setNewPersonZelle(e.target.value)}
+              />
+            </div>
+          )}
         </form>
 
         {unusedSavedFriends.length > 0 && (
@@ -549,7 +753,7 @@ export function AssignSplitView({
                 key={sf.id}
                 type="button"
                 className="saved-friend-pill"
-                onClick={() => handleQuickAddSavedFriend(sf.name, sf.venmo)}
+                onClick={() => handleQuickAddSavedFriend(sf)}
               >
                 <Plus size={12} />
                 <span>{sf.name}</span>
@@ -1053,9 +1257,9 @@ export function AssignSplitView({
               type="button"
               className="qr-nav-btn"
               style={{ minHeight: 36, padding: '6px 12px' }}
-              disabled={receiptZoom >= 2.5}
+              disabled={receiptZoom >= 3}
               onClick={() =>
-                setReceiptZoom((z) => Math.min(2.5, Number((z + 0.5).toFixed(2))))
+                setReceiptZoom((z) => Math.min(3, Number((z + 0.5).toFixed(2))))
               }
               aria-label="Zoom in"
             >

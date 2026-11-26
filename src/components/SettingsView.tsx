@@ -7,6 +7,7 @@ import {
   KeyRound,
   Loader2,
   ShieldCheck,
+  SlidersHorizontal,
   Sparkles,
   Trash2,
   UserPlus,
@@ -15,7 +16,11 @@ import {
   X,
   XCircle,
 } from 'lucide-react'
-import type { AppSettings, GeminiModelOption } from '../types/receipt'
+import type {
+  AppSettings,
+  GeminiModelOption,
+  SavedFriend,
+} from '../types/receipt'
 import { generateId } from '../utils/format'
 import {
   GEMINI_MODELS,
@@ -26,6 +31,7 @@ import {
   cleanCashAppHandle,
   cleanPayPalHandle,
   cleanVenmoHandle,
+  cleanZelleHandle,
 } from '../utils/paymentLinks'
 
 interface SettingsViewProps {
@@ -49,6 +55,10 @@ export function SettingsView({
   } | null>(null)
   const [friendName, setFriendName] = useState('')
   const [friendVenmo, setFriendVenmo] = useState('')
+  const [friendCashApp, setFriendCashApp] = useState('')
+  const [friendPayPal, setFriendPayPal] = useState('')
+  const [friendZelle, setFriendZelle] = useState('')
+  const [editingFriendId, setEditingFriendId] = useState<string | null>(null)
 
   const update = (patch: Partial<AppSettings>) => {
     onChange({ ...settings, ...patch })
@@ -77,21 +87,43 @@ export function SettingsView({
     const name = friendName.trim()
     if (!name) return
     const venmo = cleanVenmoHandle(friendVenmo)
+    const cashApp = cleanCashAppHandle(friendCashApp)
+    const paypal = cleanPayPalHandle(friendPayPal)
+    const zelle = cleanZelleHandle(friendZelle)
     update({
       savedFriends: [
         ...settings.savedFriends,
-        { id: generateId('sf'), name, ...(venmo ? { venmo } : {}) },
+        {
+          id: generateId('sf'),
+          name,
+          ...(venmo ? { venmo } : {}),
+          ...(cashApp ? { cashApp } : {}),
+          ...(paypal ? { paypal } : {}),
+          ...(zelle ? { zelle } : {}),
+        },
       ],
     })
     setFriendName('')
     setFriendVenmo('')
+    setFriendCashApp('')
+    setFriendPayPal('')
+    setFriendZelle('')
     onNotify(`Saved ${name} to quick-add friends`)
+  }
+
+  const handleUpdateFriend = (id: string, patch: Partial<SavedFriend>) => {
+    update({
+      savedFriends: settings.savedFriends.map((f) =>
+        f.id === id ? { ...f, ...patch } : f
+      ),
+    })
   }
 
   const handleDeleteFriend = (id: string) => {
     update({
       savedFriends: settings.savedFriends.filter((f) => f.id !== id),
     })
+    if (editingFriendId === id) setEditingFriendId(null)
   }
 
   return (
@@ -394,55 +426,219 @@ export function SettingsView({
             </h2>
           </div>
 
-          <form className="add-person-form" onSubmit={handleAddFriend}>
-            <input
-              type="text"
-              className="input input-compact"
-              placeholder="Friend name"
-              value={friendName}
-              onChange={(e) => setFriendName(e.target.value)}
-            />
-            <input
-              type="text"
-              className="input input-compact mono"
-              placeholder="Venmo @handle (opt.)"
-              value={friendVenmo}
-              onChange={(e) => setFriendVenmo(e.target.value)}
-            />
+          <form
+            onSubmit={handleAddFriend}
+            style={{ display: 'flex', flexDirection: 'column', gap: 10 }}
+          >
+            <div>
+              <label htmlFor="new-friend-name" className="field-label">
+                Friend Name
+              </label>
+              <input
+                id="new-friend-name"
+                type="text"
+                className="input input-compact"
+                placeholder="e.g., Alex"
+                value={friendName}
+                onChange={(e) => setFriendName(e.target.value)}
+              />
+            </div>
+
+            <div className="handles-grid">
+              <input
+                type="text"
+                className="input input-compact mono"
+                placeholder="Venmo @username (opt.)"
+                value={friendVenmo}
+                onChange={(e) => setFriendVenmo(e.target.value)}
+              />
+              <input
+                type="text"
+                className="input input-compact mono"
+                placeholder="Cash App $cashtag (opt.)"
+                value={friendCashApp}
+                onChange={(e) => setFriendCashApp(e.target.value)}
+              />
+              <input
+                type="text"
+                className="input input-compact mono"
+                placeholder="PayPal.Me username (opt.)"
+                value={friendPayPal}
+                onChange={(e) => setFriendPayPal(e.target.value)}
+              />
+              <input
+                type="text"
+                className="input input-compact mono"
+                placeholder="Zelle email or phone (opt.)"
+                value={friendZelle}
+                onChange={(e) => setFriendZelle(e.target.value)}
+              />
+            </div>
+
             <button
               type="submit"
               className="btn btn-secondary btn-sm"
               disabled={!friendName.trim()}
             >
               <UserPlus size={15} />
-              <span>Save</span>
+              <span>Save Friend</span>
             </button>
           </form>
 
           {settings.savedFriends.length > 0 && (
-            <div className="recent-list" style={{ marginTop: 12 }}>
-              {settings.savedFriends.map((sf) => (
-                <div key={sf.id} className="recent-item" style={{ padding: '9px 12px' }}>
-                  <div>
-                    <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>
-                      {sf.name}
+            <div className="recent-list" style={{ marginTop: 14 }}>
+              {settings.savedFriends.map((sf) => {
+                const isEditing = editingFriendId === sf.id
+                const badges = [
+                  sf.venmo ? `Venmo @${sf.venmo}` : null,
+                  sf.cashApp ? `Cash App $${sf.cashApp}` : null,
+                  sf.paypal ? `PayPal ${sf.paypal}` : null,
+                  sf.zelle ? `Zelle ${sf.zelle}` : null,
+                ].filter(Boolean)
+
+                return (
+                  <div
+                    key={sf.id}
+                    className="recent-item"
+                    style={{
+                      padding: '10px 12px',
+                      flexDirection: 'column',
+                      alignItems: 'stretch',
+                      gap: 8,
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 8,
+                      }}
+                    >
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>
+                          {sf.name}
+                        </div>
+                        {badges.length > 0 && (
+                          <div
+                            className="mono"
+                            style={{
+                              fontSize: '0.74rem',
+                              color: 'var(--ink-muted)',
+                              marginTop: 2,
+                              wordBreak: 'break-word',
+                            }}
+                          >
+                            {badges.join(' · ')}
+                          </div>
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                        <button
+                          type="button"
+                          className={`btn btn-xs ${isEditing ? 'btn-soft' : 'btn-ghost'}`}
+                          onClick={() =>
+                            setEditingFriendId((prev) =>
+                              prev === sf.id ? null : sf.id
+                            )
+                          }
+                          aria-label={`Edit ${sf.name}`}
+                          title="Edit friend handles"
+                        >
+                          <SlidersHorizontal size={14} />
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-danger-ghost btn-xs"
+                          onClick={() => handleDeleteFriend(sf.id)}
+                          aria-label={`Remove ${sf.name}`}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
                     </div>
-                    {sf.venmo && (
-                      <div className="mono" style={{ fontSize: '0.76rem', color: 'var(--ink-muted)' }}>
-                        @{sf.venmo}
+
+                    {isEditing && (
+                      <div
+                        className="handles-grid"
+                        style={{
+                          paddingTop: 8,
+                          borderTop: '1px dashed var(--border-strong)',
+                        }}
+                      >
+                        <div>
+                          <label className="field-label">Venmo</label>
+                          <input
+                            type="text"
+                            className="input input-compact mono"
+                            placeholder="username"
+                            value={sf.venmo ?? ''}
+                            onChange={(e) =>
+                              handleUpdateFriend(sf.id, { venmo: e.target.value })
+                            }
+                            onBlur={(e) =>
+                              handleUpdateFriend(sf.id, {
+                                venmo: cleanVenmoHandle(e.target.value),
+                              })
+                            }
+                          />
+                        </div>
+                        <div>
+                          <label className="field-label">Cash App</label>
+                          <input
+                            type="text"
+                            className="input input-compact mono"
+                            placeholder="$cashtag"
+                            value={sf.cashApp ?? ''}
+                            onChange={(e) =>
+                              handleUpdateFriend(sf.id, { cashApp: e.target.value })
+                            }
+                            onBlur={(e) =>
+                              handleUpdateFriend(sf.id, {
+                                cashApp: cleanCashAppHandle(e.target.value),
+                              })
+                            }
+                          />
+                        </div>
+                        <div>
+                          <label className="field-label">PayPal.Me</label>
+                          <input
+                            type="text"
+                            className="input input-compact mono"
+                            placeholder="username"
+                            value={sf.paypal ?? ''}
+                            onChange={(e) =>
+                              handleUpdateFriend(sf.id, { paypal: e.target.value })
+                            }
+                            onBlur={(e) =>
+                              handleUpdateFriend(sf.id, {
+                                paypal: cleanPayPalHandle(e.target.value),
+                              })
+                            }
+                          />
+                        </div>
+                        <div>
+                          <label className="field-label">Zelle</label>
+                          <input
+                            type="text"
+                            className="input input-compact mono"
+                            placeholder="email or phone"
+                            value={sf.zelle ?? ''}
+                            onChange={(e) =>
+                              handleUpdateFriend(sf.id, { zelle: e.target.value })
+                            }
+                            onBlur={(e) =>
+                              handleUpdateFriend(sf.id, {
+                                zelle: cleanZelleHandle(e.target.value),
+                              })
+                            }
+                          />
+                        </div>
                       </div>
                     )}
                   </div>
-                  <button
-                    type="button"
-                    className="btn btn-danger-ghost btn-xs"
-                    onClick={() => handleDeleteFriend(sf.id)}
-                    aria-label={`Remove ${sf.name}`}
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </section>

@@ -1900,12 +1900,12 @@ a:focus-visible {
 }
 
 .receipt-pin-scroll {
-  max-height: 30dvh;
+  max-height: 34dvh;
   overflow: auto;
   -webkit-overflow-scrolling: touch;
+  touch-action: pan-x pan-y pinch-zoom;
   background: #181715;
   padding: 8px;
-  text-align: center;
 }
 
 .receipt-pin-img {
@@ -1913,6 +1913,7 @@ a:focus-visible {
   width: 100%;
   height: auto;
   border-radius: 6px;
+  transition: width 0.14s ease;
 }
 
 .receipt-viewer-toolbar {

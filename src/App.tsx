@@ -122,21 +122,35 @@ export default function App() {
   }, [])
 
   const handleSaveFriendToSettings = useCallback(
-    (name: string, venmo?: string) => {
+    (
+      name: string,
+      handles?: { venmo?: string; cashApp?: string; paypal?: string; zelle?: string }
+    ) => {
       setSettings((prev) => {
-        if (
-          prev.savedFriends.some(
-            (sf) => sf.name.toLowerCase() === name.toLowerCase()
+        const cleanPatch = {
+          ...(handles?.venmo ? { venmo: handles.venmo } : {}),
+          ...(handles?.cashApp ? { cashApp: handles.cashApp } : {}),
+          ...(handles?.paypal ? { paypal: handles.paypal } : {}),
+          ...(handles?.zelle ? { zelle: handles.zelle } : {}),
+        }
+        const existingIdx = prev.savedFriends.findIndex(
+          (sf) => sf.name.toLowerCase() === name.toLowerCase()
+        )
+        let nextFriends
+        if (existingIdx >= 0) {
+          if (Object.keys(cleanPatch).length === 0) return prev
+          nextFriends = prev.savedFriends.map((sf, idx) =>
+            idx === existingIdx ? { ...sf, ...cleanPatch } : sf
           )
-        ) {
-          return prev
+        } else {
+          nextFriends = [
+            ...prev.savedFriends,
+            { id: generateId('sf'), name, ...cleanPatch },
+          ]
         }
         const next: AppSettings = {
           ...prev,
-          savedFriends: [
-            ...prev.savedFriends,
-            { id: generateId('sf'), name, ...(venmo ? { venmo } : {}) },
-          ],
+          savedFriends: nextFriends,
         }
         saveSettings(next)
         return next

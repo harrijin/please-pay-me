@@ -19,6 +19,9 @@ export interface SavedFriend {
   id: string
   name: string
   venmo?: string
+  cashApp?: string
+  paypal?: string
+  zelle?: string
 }
 
 export interface AppSettings {
@@ -35,6 +38,9 @@ export interface Person {
   name: string
   color: string
   venmo?: string
+  cashApp?: string
+  paypal?: string
+  zelle?: string
   paid?: boolean
   /** True when this person entry represents the current user ("Me") */
   isSelf?: boolean
