@@ -1,4 +1,4 @@
-import type { AppSettings, ReceiptSplit, ScannedReceiptRaw } from '../types/receipt'
+import type { AppSettings, Person, ReceiptSplit, ScannedReceiptRaw } from '../types/receipt'
 import { dollarsToCents, generateId, pickPersonColor, todayIsoDate } from './format'
 
 export function createSampleReceipt(settings: AppSettings): ReceiptSplit {
@@ -13,7 +13,7 @@ export function createSampleReceipt(settings: AppSettings): ReceiptSplit {
     merchant: 'Marigold Woodfire Bistro',
     date: todayIsoDate(),
     people: [
-      { id: meId, name: settings.userName.trim() || 'Me', color: pickPersonColor(0) },
+      { id: meId, name: settings.userName.trim() || 'Me', color: pickPersonColor(0), isSelf: true },
       { id: mayaId, name: 'Maya', color: pickPersonColor(1), venmo: 'maya-chen' },
       { id: devonId, name: 'Devon', color: pickPersonColor(2), venmo: 'devon_r' },
       { id: priyaId, name: 'Priya', color: pickPersonColor(3) },
@@ -97,7 +97,7 @@ export function createBlankReceipt(settings: AppSettings): ReceiptSplit {
     merchant: '',
     date: todayIsoDate(),
     people: [
-      { id: meId, name: settings.userName.trim() || 'Me', color: pickPersonColor(0) },
+      { id: meId, name: settings.userName.trim() || 'Me', color: pickPersonColor(0), isSelf: true },
       { id: friendId, name: 'Friend 1', color: pickPersonColor(1) },
     ],
     payerId: meId,
@@ -126,8 +126,8 @@ export function createReceiptFromScan(
 ): ReceiptSplit {
   const now = Date.now()
   const meId = generateId('p')
-  const people = [
-    { id: meId, name: settings.userName.trim() || 'Me', color: pickPersonColor(0) },
+  const people: Person[] = [
+    { id: meId, name: settings.userName.trim() || 'Me', color: pickPersonColor(0), isSelf: true },
   ]
 
   // Pre-populate up to 2 saved friends for quick tapping if the user has saved friends

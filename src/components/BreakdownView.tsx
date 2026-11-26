@@ -23,6 +23,7 @@ import {
 interface BreakdownViewProps {
   payload: SharePayload
   isHostPreview?: boolean
+  isPayingSelf?: boolean
   onExit: () => void
   onNotify: (msg: string) => void
 }
@@ -30,6 +31,7 @@ interface BreakdownViewProps {
 export function BreakdownView({
   payload,
   isHostPreview = false,
+  isPayingSelf = false,
   onExit,
   onNotify,
 }: BreakdownViewProps) {
@@ -250,7 +252,7 @@ export function BreakdownView({
                       <span>{copiedField === 'amount' ? 'Copied amount' : 'Copy amount'}</span>
                     </button>
                   </div>
-                  {isHostPreview && (
+                  {isHostPreview && isPayingSelf && (
                     <p className="field-hint" style={{ margin: '4px 2px 0' }}>
                       Preview note: Venmo&apos;s app won&apos;t open a payment to your own
                       account — test this button from a friend&apos;s phone.

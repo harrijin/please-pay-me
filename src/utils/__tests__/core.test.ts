@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { PaymentHandles, ReceiptSplit } from '../../types/receipt'
+import type { AppSettings, PaymentHandles, ReceiptSplit } from '../../types/receipt'
 import {
   buildCashAppPayUrl,
   buildPaymentNote,
@@ -7,6 +7,7 @@ import {
   buildVenmoChargeUrl,
   buildVenmoPayUrl,
   resolveDestinationUrl,
+  resolvePayerHandles,
 } from '../paymentLinks'
 import {
   buildShareUrl,
@@ -152,6 +153,58 @@ describe('paymentLinks', () => {
     })
     expect(fallback.isFallback).toBe(true)
     expect(fallback.url).toBe('https://harrijin.github.io/please-pay-me/#s=abc')
+  })
+
+  it('uses friend handle (never user settings handles) when a friend is marked as payer', () => {
+    const settings: AppSettings = {
+      userName: 'Harrison',
+      geminiApiKey: '',
+      geminiModel: 'gemini-3.5-flash-lite',
+      customGeminiModel: '',
+      handles: {
+        venmo: 'my-own-venmo',
+        cashApp: 'mycash',
+        paypal: 'mypaypal',
+        zelle: 'me@example.com',
+      },
+      savedFriends: [],
+    }
+    const receipt: ReceiptSplit = {
+      id: 's_payer',
+      merchant: 'Taco Spot',
+      date: '2026-11-26',
+      people: [
+        { id: 'me', name: 'Harrison', color: '#0f766e', isSelf: true },
+        { id: 'friend', name: 'Alex', color: '#c2410c', venmo: '@alex-friend' },
+      ],
+      payerId: 'friend',
+      items: [],
+      taxCents: 0,
+      tipCents: 0,
+      extraFeeCents: 0,
+      discountCents: 0,
+      taxTipMode: 'proportional',
+      createdAt: 1,
+      updatedAt: 1,
+    }
+
+    const friendResult = resolvePayerHandles(receipt.people[1], receipt, settings)
+    expect(friendResult.isPayerSelf).toBe(false)
+    expect(friendResult.handles).toEqual({
+      venmo: 'alex-friend',
+      cashApp: '',
+      paypal: '',
+      zelle: '',
+    })
+
+    const selfResult = resolvePayerHandles(receipt.people[0], receipt, settings)
+    expect(selfResult.isPayerSelf).toBe(true)
+    expect(selfResult.handles).toEqual({
+      venmo: 'my-own-venmo',
+      cashApp: 'mycash',
+      paypal: 'mypaypal',
+      zelle: 'me@example.com',
+    })
   })
 })
 

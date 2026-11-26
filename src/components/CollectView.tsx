@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import type {
   AppSettings,
+  Person,
   PersonBreakdown,
   QRDestination,
   ReceiptSplit,
@@ -25,11 +26,13 @@ import { formatCents, getInitials } from '../utils/format'
 import {
   buildPaymentNote,
   buildVenmoChargeUrl,
+  buildVenmoPayUrl,
   cleanCashAppHandle,
   cleanPayPalHandle,
   cleanVenmoHandle,
   hasAnyPaymentHandle,
   resolveDestinationUrl,
+  resolvePayerHandles,
 } from '../utils/paymentLinks'
 import { buildShareUrl, createSharePayload } from '../utils/shareCodec'
 import { QRModal } from './QRModal'
@@ -39,9 +42,10 @@ interface CollectViewProps {
   summary: SplitSummary
   settings: AppSettings
   onTogglePaid: (personId: string) => void
+  onUpdatePerson: (personId: string, patch: Partial<Person>) => void
   onBackToAssign: () => void
   onOpenSettings: () => void
-  onPreviewBreakdown: (payload: SharePayload) => void
+  onPreviewBreakdown: (payload: SharePayload, isPayingSelf: boolean) => void
   onNotify: (msg: string) => void
 }
 
@@ -50,6 +54,7 @@ export function CollectView({
   summary,
   settings,
   onTogglePaid,
+  onUpdatePerson,
   onBackToAssign,
   onOpenSettings,
   onPreviewBreakdown,
@@ -63,6 +68,11 @@ export function CollectView({
   const payer =
     receipt.people.find((p) => p.id === receipt.payerId) ?? receipt.people[0]
   const payerName = payer?.name || settings.userName || 'Me'
+
+  const { handles: payerHandles, isPayerSelf } = useMemo(
+    () => resolvePayerHandles(payer, receipt, settings),
+    [payer, receipt, settings]
+  )
 
   const friendBreakdowns = useMemo(
     () => summary.breakdowns.filter((b) => !b.isPayer),
@@ -83,15 +93,15 @@ export function CollectView({
   const remainingCents = Math.max(0, totalToCollectCents - collectedCents)
 
   const note = buildPaymentNote(receipt.merchant, receipt.date)
-  const hasHandles = hasAnyPaymentHandle(settings.handles)
+  const hasHandles = hasAnyPaymentHandle(payerHandles)
 
   const getFriendLinks = (b: PersonBreakdown) => {
-    const payload = createSharePayload(receipt, b, payerName, settings.handles)
+    const payload = createSharePayload(receipt, b, payerName, payerHandles)
     const breakdownUrl = buildShareUrl(payload)
     const resolved = resolveDestinationUrl({
       destination,
       breakdownUrl,
-      handles: settings.handles,
+      handles: payerHandles,
       amountCents: b.totalCents,
       note,
     })
@@ -100,7 +110,10 @@ export function CollectView({
       b.totalCents,
       note
     )
-    return { payload, breakdownUrl, resolved, venmoChargeUrl }
+    const venmoPayPayerUrl = payerHandles.venmo
+      ? buildVenmoPayUrl(payerHandles.venmo, b.totalCents, note)
+      : null
+    return { payload, breakdownUrl, resolved, venmoChargeUrl, venmoPayPayerUrl }
   }
 
   const handleCopy = async (url: string, personId: string, label: string) => {
@@ -148,18 +161,22 @@ export function CollectView({
     {
       id: 'venmo',
       label: 'Direct: Venmo',
-      configured: Boolean(cleanVenmoHandle(settings.handles.venmo)),
+      configured: Boolean(cleanVenmoHandle(payerHandles.venmo)),
     },
-    {
-      id: 'cashapp',
-      label: 'Direct: Cash App',
-      configured: Boolean(cleanCashAppHandle(settings.handles.cashApp)),
-    },
-    {
-      id: 'paypal',
-      label: 'Direct: PayPal',
-      configured: Boolean(cleanPayPalHandle(settings.handles.paypal)),
-    },
+    ...(isPayerSelf
+      ? [
+          {
+            id: 'cashapp' as const,
+            label: 'Direct: Cash App',
+            configured: Boolean(cleanCashAppHandle(payerHandles.cashApp)),
+          },
+          {
+            id: 'paypal' as const,
+            label: 'Direct: PayPal',
+            configured: Boolean(cleanPayPalHandle(payerHandles.paypal)),
+          },
+        ]
+      : []),
   ]
 
   const qrItems = useMemo(
@@ -177,7 +194,7 @@ export function CollectView({
         }
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [friendBreakdowns, destination, settings.handles, receipt.merchant, receipt.date]
+    [friendBreakdowns, destination, payerHandles, receipt.merchant, receipt.date]
   )
 
   return (
@@ -260,7 +277,7 @@ export function CollectView({
       <section className="card">
         <div className="card-header" style={{ marginBottom: 10 }}>
           <h2 className="card-title">QR &amp; Share Destination</h2>
-          {!hasHandles && (
+          {isPayerSelf && !hasHandles && (
             <button
               type="button"
               className="btn btn-soft btn-xs"
@@ -271,6 +288,34 @@ export function CollectView({
             </button>
           )}
         </div>
+
+        {!isPayerSelf && payer && (
+          <div
+            style={{
+              marginBottom: 12,
+              padding: 12,
+              borderRadius: 'var(--radius-md)',
+              background: 'var(--surface-subtle)',
+              border: '1px solid var(--border-strong)',
+            }}
+          >
+            <label htmlFor="payer-venmo-inline" className="field-label">
+              {payerName}&apos;s Venmo @handle (payments go to {payerName}, not you)
+            </label>
+            <input
+              id="payer-venmo-inline"
+              type="text"
+              className="input input-compact mono"
+              placeholder={`Enter ${payerName}'s Venmo username`}
+              value={payer.venmo ?? ''}
+              onChange={(e) =>
+                onUpdatePerson(payer.id, {
+                  venmo: cleanVenmoHandle(e.target.value),
+                })
+              }
+            />
+          </div>
+        )}
 
         <div className="dest-pills" role="radiogroup" aria-label="QR and Share Destination">
           {destOptions.map((opt) => (
@@ -283,7 +328,11 @@ export function CollectView({
               onClick={() => {
                 setDestination(opt.id)
                 if (!opt.configured) {
-                  onNotify(`Add your ${opt.label.replace('Direct: ', '')} handle in Settings`)
+                  onNotify(
+                    isPayerSelf
+                      ? `Add your ${opt.label.replace('Direct: ', '')} handle in Settings`
+                      : `Enter ${payerName}'s Venmo handle above first`
+                  )
                 }
               }}
             >
@@ -295,8 +344,10 @@ export function CollectView({
 
         <p className="field-hint" style={{ marginBottom: 0 }}>
           {destination === 'breakdown'
-            ? 'Opens a zero-database itemized receipt ticket (#s=…) with 1-tap buttons for all your configured payment apps.'
-            : 'Scans or shares directly into the selected payment app with the exact amount prefilled.'}
+            ? `Opens a zero-database itemized receipt ticket (#s=…) paying ${payerName}${
+                payerHandles.venmo ? ` (@${payerHandles.venmo})` : ''
+              }.`
+            : `Scans or shares directly into the selected payment app to pay ${payerName}.`}
         </p>
       </section>
 
@@ -316,7 +367,8 @@ export function CollectView({
         </section>
       ) : (
         friendBreakdowns.map((b, idx) => {
-          const { payload, resolved, venmoChargeUrl } = getFriendLinks(b)
+          const { payload, resolved, venmoChargeUrl, venmoPayPayerUrl } =
+            getFriendLinks(b)
           const isExpanded = expandedPersonId === b.person.id
           const isPaid = Boolean(b.person.paid)
 
@@ -456,16 +508,40 @@ export function CollectView({
                   <span>{copiedId === b.person.id ? 'Copied!' : 'Copy Link'}</span>
                 </button>
 
-                <a
-                  href={venmoChargeUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="btn btn-secondary btn-sm"
-                >
-                  <Send size={15} />
-                  <span>Charge Venmo</span>
-                  <ExternalLink size={12} style={{ opacity: 0.65 }} />
-                </a>
+                {isPayerSelf ? (
+                  <a
+                    href={venmoChargeUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn btn-secondary btn-sm"
+                  >
+                    <Send size={15} />
+                    <span>Charge Venmo</span>
+                    <ExternalLink size={12} style={{ opacity: 0.65 }} />
+                  </a>
+                ) : venmoPayPayerUrl ? (
+                  <a
+                    href={venmoPayPayerUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn btn-secondary btn-sm"
+                  >
+                    <Send size={15} />
+                    <span>Pay {payerName}</span>
+                    <ExternalLink size={12} style={{ opacity: 0.65 }} />
+                  </a>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() =>
+                      onNotify(`Enter ${payerName}'s Venmo handle above to pay on Venmo`)
+                    }
+                  >
+                    <Send size={15} />
+                    <span>Pay Venmo</span>
+                  </button>
+                )}
               </div>
 
               <div
@@ -482,7 +558,7 @@ export function CollectView({
                 <button
                   type="button"
                   className="btn btn-ghost btn-xs"
-                  onClick={() => onPreviewBreakdown(payload)}
+                  onClick={() => onPreviewBreakdown(payload, isPayerSelf)}
                 >
                   <Eye size={14} />
                   <span>Preview Ticket</span>

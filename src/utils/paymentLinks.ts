@@ -1,4 +1,10 @@
-import type { PaymentHandles, QRDestination } from '../types/receipt'
+import type {
+  AppSettings,
+  PaymentHandles,
+  Person,
+  QRDestination,
+  ReceiptSplit,
+} from '../types/receipt'
 import { centsToPlainAmount } from './format'
 
 export function cleanVenmoHandle(raw?: string): string {
@@ -111,6 +117,69 @@ export function hasAnyPaymentHandle(handles: PaymentHandles): boolean {
       cleanPayPalHandle(handles.paypal) ||
       cleanZelleHandle(handles.zelle)
   )
+}
+
+/**
+ * Determines whether a Person entry on a receipt represents the current app user.
+ * Respects explicit `isSelf`, and falls back safely for older saved splits.
+ */
+export function isPersonSelf(
+  person: Person | undefined,
+  receipt: ReceiptSplit,
+  settings: AppSettings
+): boolean {
+  if (!person) return true
+  if (typeof person.isSelf === 'boolean') return person.isSelf
+
+  const personVenmo = cleanVenmoHandle(person.venmo)
+  const myVenmo = cleanVenmoHandle(settings.handles.venmo)
+  // If the person has a distinct Venmo handle explicitly set, they are a friend.
+  if (personVenmo && (!myVenmo || personVenmo.toLowerCase() !== myVenmo.toLowerCase())) {
+    return false
+  }
+
+  const nameLower = person.name.trim().toLowerCase()
+  const myNameLower = (settings.userName.trim() || 'me').toLowerCase()
+  if (nameLower === myNameLower || nameLower === 'me') return true
+
+  // Fallback: first person in a receipt with no custom Venmo handle
+  return receipt.people[0]?.id === person.id && !personVenmo
+}
+
+/**
+ * Returns the payment handles for whoever actually paid the bill.
+ * - If you paid: uses your Settings handles (with any override on your person chip).
+ * - If a friend paid: uses ONLY that friend's handle(s), never substituting yours.
+ */
+export function resolvePayerHandles(
+  payer: Person | undefined,
+  receipt: ReceiptSplit,
+  settings: AppSettings
+): { handles: PaymentHandles; isPayerSelf: boolean } {
+  const selfPayer = isPersonSelf(payer, receipt, settings)
+  const payerVenmo = cleanVenmoHandle(payer?.venmo)
+
+  if (selfPayer) {
+    return {
+      isPayerSelf: true,
+      handles: {
+        venmo: payerVenmo || cleanVenmoHandle(settings.handles.venmo),
+        cashApp: cleanCashAppHandle(settings.handles.cashApp),
+        paypal: cleanPayPalHandle(settings.handles.paypal),
+        zelle: cleanZelleHandle(settings.handles.zelle),
+      },
+    }
+  }
+
+  return {
+    isPayerSelf: false,
+    handles: {
+      venmo: payerVenmo,
+      cashApp: '',
+      paypal: '',
+      zelle: '',
+    },
+  }
 }
 
 export function resolveDestinationUrl(options: {

@@ -10,6 +10,7 @@ import { SettingsView } from './components/SettingsView'
 import { Toast } from './components/Toast'
 import type {
   AppSettings,
+  Person,
   ReceiptSplit,
   ScannedReceiptRaw,
   SharePayload,
@@ -78,7 +79,10 @@ export default function App() {
   )
   const [pendingPhoto, setPendingPhoto] = useState<File | null>(null)
   const [activeReceipt, setActiveReceipt] = useState<ReceiptSplit | null>(null)
-  const [previewPayload, setPreviewPayload] = useState<SharePayload | null>(null)
+  const [previewState, setPreviewState] = useState<{
+    payload: SharePayload
+    isPayingSelf: boolean
+  } | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [toastMsg, setToastMsg] = useState<string | null>(null)
 
@@ -204,6 +208,18 @@ export default function App() {
     persistActiveReceipt(next)
   }
 
+  const handleUpdatePerson = (personId: string, patch: Partial<Person>) => {
+    if (!activeReceipt) return
+    const next: ReceiptSplit = {
+      ...activeReceipt,
+      people: activeReceipt.people.map((p) =>
+        p.id === personId ? { ...p, ...patch } : p
+      ),
+      updatedAt: Date.now(),
+    }
+    persistActiveReceipt(next)
+  }
+
   const handleExitShareLink = () => {
     if (typeof window !== 'undefined') {
       window.history.replaceState(
@@ -267,13 +283,14 @@ export default function App() {
   }
 
   // Mode 2: Host previewing a friend's breakdown ticket
-  if (previewPayload) {
+  if (previewState) {
     return (
       <>
         <BreakdownView
-          payload={previewPayload}
+          payload={previewState.payload}
           isHostPreview
-          onExit={() => setPreviewPayload(null)}
+          isPayingSelf={previewState.isPayingSelf}
+          onExit={() => setPreviewState(null)}
           onNotify={notify}
         />
         <Toast message={toastMsg} />
@@ -357,9 +374,12 @@ export default function App() {
             summary={summary}
             settings={settings}
             onTogglePaid={handleTogglePaid}
+            onUpdatePerson={handleUpdatePerson}
             onBackToAssign={() => setRoute('assign')}
             onOpenSettings={() => setSettingsOpen(true)}
-            onPreviewBreakdown={(payload) => setPreviewPayload(payload)}
+            onPreviewBreakdown={(payload, isPayingSelf) =>
+              setPreviewState({ payload, isPayingSelf })
+            }
             onNotify={notify}
           />
         )}

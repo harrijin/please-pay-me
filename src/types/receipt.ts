@@ -36,6 +36,8 @@ export interface Person {
   color: string
   venmo?: string
   paid?: boolean
+  /** True when this person entry represents the current user ("Me") */
+  isSelf?: boolean
 }
 
 export interface ReceiptItem {
